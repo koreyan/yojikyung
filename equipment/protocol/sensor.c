@@ -1,4 +1,4 @@
-#include "data.h"
+#include "sensor.h"
 
 
 // 센서 종류, 정상값 저장

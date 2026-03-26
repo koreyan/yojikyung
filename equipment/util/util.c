@@ -1,31 +1,30 @@
 #include "util.h"
 
-// 현재 시간을 밀리초 단위로 반환하는 함수
-uint64_t now_ms(){
-    // timeval 구조체는 시간을 두 부분으로 나눠 저장
-    // tv_sec : 초(second)
-    // tv_usec: 마이크로초(microsecond, 백만분의 1초)
-    struct timeval tv; 
-    
-    // 현재 시간을 tv 구조체에 저장
-    // 첫 번째 인자: 시간을 저장할 구조체
-    // 두 번째 인자: timezone 정보 (요즘은 사용하지 않으니까 NULL)
-    gettimeofday(&tv, NULL);
+//------------------------------------------------------------
+// 현재 시간(ms)
+//------------------------------------------------------------
+// 시스템 시간을 millisecond 단위로 반환
+uint64_t get_time_ms()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
 
-
-    // 초 단위 시간을 밀리초로 변환 
-    // tv_sec * 1000 -> 초 -> 밀리초
-    // 
-    // tv_usec은 마이크로초 -> 1000으로 나누면 밀리초
-    // 예시 
-    // tv_sec = 10
-    // tv_usec = 500000
-    //
-    // 10 * 1000 = 10000 ms
-    // 500000 / 1000 = 500ms
-    //
-    // 총 10500 ms
-    // ULL = unsigned Long Long  => 큰 값 계산할 때 타입을 이렇게 강제. 
-    return tv.tv_sec * 1000ULL + tv.tv_usec / 1000;
+    return (uint64_t)ts.tv_sec * 1000ULL + ts.tv_nsec / 1000000ULL;
 }
 
+
+// min ~ max 사이의 랜덤 float 생성
+// → 초기값, 변화량 계산에 사용
+float rand_float(float min, float max)
+{
+    return min + ((float)rand() / RAND_MAX) * (max - min);
+}
+
+// 값이 범위를 벗어나지 않도록 제한
+// → 센서 값이 정상 범위 유지하도록 보정
+float clamp(float v, float min, float max)
+{
+    if (v < min) return min;
+    if (v > max) return max;
+    return v;
+}

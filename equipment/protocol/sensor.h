@@ -1,5 +1,5 @@
-#ifndef SENSORPROTOCOL_H
-#define SENSORPROTOCOL_H
+#ifndef SENSOR_H
+#define SENSOR_H
 #include "common.h"
 
 #define MODULE_SHIFT 12
@@ -48,7 +48,7 @@ typedef enum {
 
 
 //------------------------------------------------------------
-// 센서 데이터 구조
+// 센서 데이터 구조 (패킷용)
 //------------------------------------------------------------
 typedef struct {
 
@@ -57,7 +57,12 @@ typedef struct {
 
 } SensorData;
 
-
+// 센서의 "현재 값 상태"를 유지하기 위한 구조체
+// → 매번 랜덤이 아니라 이전 값을 기반으로 변화시키기 위해 필요
+typedef struct {
+    uint16_t sensor_id;
+    float value;          // 현재 센서 값 (state)
+} SensorState;
 
 //------------------------------------------------------------
 // 센서 클래스 (정상 범위 정의)
@@ -83,7 +88,19 @@ typedef struct {
 
 } Sensor;
 
-// Sensor 객체 데이터 생성 주기를 보고 주기가 되면 SensorData를 만들면 됨. 굳이 내포하고 있을 필요없음.
+
+
+// SECS-II 인코딩 함수 선언
+
+uint8_t* write_list(uint8_t* p, uint32_t count);
+uint8_t* write_u2(uint8_t* p, uint16_t v);
+uint8_t* write_u8(uint8_t* p, uint64_t v);
+uint8_t* write_f4(uint8_t* p, float v);
+
+uint8_t* write_item_header(uint8_t* p, uint8_t type, uint32_t len);
+uint8_t* write_length(uint8_t* p, uint32_t len, uint8_t lb);
+uint8_t* write_primitive_be(uint8_t* p, uint8_t type, uint64_t value, uint32_t size);
+
 
 
 #endif
