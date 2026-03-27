@@ -42,23 +42,3 @@ int connect_server(){
     printf("Connected to server\n");
     return sock;
 }
-
-
-
-// 서버로 패킷을 전송하는 함수
-// sock   : 이미 connect()로 서버와 연결된 socket file descriptor
-// packet : 전송할 데이터가 저장된 메모리 주소
-// size   : 전송할 데이터의 크기(byte 단위)
-// void send_packet(int sock, char* packet, int size)
-// {
-//     // TCP socket을 통해 packet 전송
-//     // send() 함수
-//     // sock   : 데이터를 보낼 socket
-//     // packet : 전송할 데이터가 저장된 버퍼
-//     // size   : 보낼 데이터 크기
-//     // 0      : 옵션 (보통 0 사용)
-//     //
-//     // 이 호출을 하면
-//     // 사용자 메모리(packet) → 커널 socket buffer → TCP 네트워크 전송
-//     send(sock, packet, size, 0);
-// }

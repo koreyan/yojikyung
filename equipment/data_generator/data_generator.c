@@ -1,11 +1,6 @@
 #include "data_generator.h"
 
 
-extern SensorClass sensor_classes[];
-extern const int SENSOR_CLASS_COUNT;
-
-
-
 static void add_sensor(Sensor sensors[], int *i, Module module, SensorType type, uint8_t index, int period)
 {
     sensors[*i].sensor_id = MAKE_SENSOR_ID(module,type,index);
@@ -63,22 +58,6 @@ int init_sensors(Sensor sensors[])
     return i;
 }
 
-
-
-
-// sensor_id → class_id 추출 후 해당 SensorClass 찾기
-// → 센서마다 정상 범위(min/max)를 얻기 위해 필요
-SensorClass* find_sensor_class(uint16_t sensor_id)
-{
-    uint8_t class_id = GET_CLASS_ID(sensor_id); // 상위 8비트: module + type
-
-    for (int i = 0; i < SENSOR_CLASS_COUNT; i++) {
-        if (sensor_classes[i].class_id == class_id) {
-            return &sensor_classes[i]; // 해당 클래스 반환
-        }
-    }
-    return NULL; // 못 찾으면 NULL
-}
 
 // 센서 초기값을 정상 범위 내에서 랜덤으로 설정
 // → 시작부터 자연스러운 값 분포 생성

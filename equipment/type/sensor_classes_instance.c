@@ -1,4 +1,6 @@
-#include "sensor.h"
+#include "sensor_id_utill.h"
+#include "sensor_class.h"
+#include "sensor_id.h"
 
 
 // 센서 종류, 정상값 저장

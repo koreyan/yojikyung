@@ -1,7 +1,13 @@
 #ifndef DATA_GENERATOR_H
 #define DATA_GENERATOR_H
 #include "common.h"
-#include "../protocol/sensor.h"
+#include "sensor_type.h"
+#include "sensor_class.h"
+#include "sensor_state.h"
+#include "sensor_data.h"
+#include "sensor_id.h"
+#include "sensor_id_utill.h"
+
 #include "util.h"
 
 #define ABNORMAL_PROB 0.0001f   // 0.01% 확률로 이상치 발생
@@ -12,10 +18,6 @@
 // 센서 구성 생성
 //------------------------------------------------------------
 int init_sensors(Sensor sensors[]);
-
-// sensor_id → class_id 추출 후 해당 SensorClass 찾기
-// → 센서마다 정상 범위(min/max)를 얻기 위해 필요
-SensorClass* find_sensor_class(uint16_t sensor_id);
 
 // 센서 초기값을 정상 범위 내에서 랜덤으로 설정
 // → 시작부터 자연스러운 값 분포 생성

@@ -1,73 +1,55 @@
-# ==============================
-# Compiler & Flags
-# ==============================
+# 컴파일러
 CC = gcc
+
+# 옵션
 CFLAGS = -Wall -Wextra -O2
 
-# ==============================
-# Directories
-# ==============================
-COMMON_DIR = common
-DATA_GEN_DIR = data_generator
-NETWORK_DIR = network
-PACKET_DIR = packet
-PROTOCOL_DIR = protocol
-RUN_DIR = run
-UTIL_DIR = util
+# include 경로
+INCLUDES = \
+	-Icommon \
+	-Idata_generator \
+	-Inetwork \
+	-Ipacket \
+	-Iprotocol/hsms \
+	-Iprotocol/secs2 \
+	-Irun \
+	-Itype \
+	-Iutil
 
-# ==============================
-# Source Files
-# ==============================
+# 실행파일
+TARGET = equipment
+
+# 소스 파일 (존재하는 .c만 정확히 포함)
 SRCS = \
-	main.c \
-	$(DATA_GEN_DIR)/data_generator.c \
-	$(NETWORK_DIR)/network.c \
-	$(PACKET_DIR)/packet.c \
-	$(PROTOCOL_DIR)/secs2.c \
-	$(PROTOCOL_DIR)/sensor.c \
-	$(UTIL_DIR)/util.c \
-	$(RUN_DIR)/run_equipment.c
+	$(wildcard data_generator/*.c) \
+	$(wildcard network/*.c) \
+	$(wildcard packet/*.c) \
+	$(wildcard protocol/secs2/*.c) \
+	$(wildcard run/*.c) \
+	$(wildcard type/*.c) \
+	$(wildcard util/*.c) \
+	main.c
 
-# ==============================
-# Object Files
-# ==============================
+# 오브젝트
 OBJS = $(SRCS:.c=.o)
 
-# ==============================
-# Include Paths
-# ==============================
-INCLUDES = \
-	-I$(COMMON_DIR) \
-	-I$(DATA_GEN_DIR) \
-	-I$(NETWORK_DIR) \
-	-I$(PACKET_DIR) \
-	-I$(PROTOCOL_DIR) \
-	-I$(RUN_DIR) \
-	-I$(UTIL_DIR)
-
-# ==============================
-# Target
-# ==============================
-TARGET = equipment_simulator
-
-# ==============================
-# Build Rules
-# ==============================
+# 기본 타겟
 all: $(TARGET)
 
+# 링크
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
+# 컴파일
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# ==============================
-# Clean
-# ==============================
+# 정리
 clean:
 	rm -f $(OBJS) $(TARGET)
 
-# ==============================
-# Rebuild
-# ==============================
 re: clean all
+
+# 디버그용
+print:
+	@echo "SRCS = $(SRCS)"
