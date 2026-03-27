@@ -5,6 +5,8 @@
 #include "hsms_receiver.h"
 #include "decoder.h"
 #include "packet_data.h"
+#include "process_sensor.h"
+#include "debug.h"
 
 /* =========================
    패킷 처리 (Hook)

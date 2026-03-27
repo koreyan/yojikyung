@@ -1,4 +1,4 @@
-#include "sensor_id_utill.h"
+#include "sensor_id_util.h"
 
 
 extern SensorClass sensor_classes[];
@@ -16,4 +16,11 @@ SensorClass* find_sensor_class(uint16_t sensor_id)
         }
     }
     return NULL; // 못 찾으면 NULL
+}
+
+void decode_sensor_id(uint16_t id, int *module, int *type, int *index)
+{
+    *module = (id >> 12) & 0x0F;
+    *type   = (id >> 8)  & 0x0F;
+    *index  = id & 0xFF;
 }

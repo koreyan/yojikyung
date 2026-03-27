@@ -1,73 +1,66 @@
-# =========================
-# Compiler
-# =========================
+# 컴파일러
 CC = gcc
-CFLAGS = -Wall -O2
 
-# =========================
-# Target
-# =========================
+# 옵션
+CFLAGS = -Wall -Wextra -O2
+
+# include 경로
+INCLUDES = \
+	-Icommon \
+	-Icontroller \
+	-Icontroller/debug \
+	-Idecoder \
+	-Idecoder/hsms_header_parser \
+	-Idecoder/secs2_parser \
+	-Inetwork \
+	-Inetwork/hsms_receiver \
+	-Irun_server \
+	-Itype \
+	-Isensor_dispatcher \
+	-Isensor_dispatcher/anomaly_detection \
+	-Isensor_dispatcher/moving_average \
+	-Isensor_dispatcher/sensor_state
+
+# 실행파일
 TARGET = server
 
-# =========================
-# Source Files
-# =========================
-
+# 소스 파일 (test 제외)
 SRCS = \
-main.c \
-controller/controller.c \
-decoder/decoder.c \
-decoder/hsms_header_parser/hsms_header_parser.c \
-decoder/secs2_parser/secs2_parser.c \
-network/network.c \
-network/hsms_receiver/hsms_receiver.c \
-run_server/run_server.c
+	$(wildcard controller/*.c) \
+	$(wildcard controller/debug/*.c) \
+	$(wildcard decoder/*.c) \
+	$(wildcard decoder/hsms_header_parser/*.c) \
+	$(wildcard decoder/secs2_parser/*.c) \
+	$(wildcard network/*.c) \
+	$(wildcard network/hsms_receiver/*.c) \
+	$(wildcard run_server/*.c) \
+	$(wildcard sensor_dispatcher/*.c) \
+	$(wildcard sensor_dispatcher/anomaly_detection/*.c) \
+	$(wildcard sensor_dispatcher/moving_average/*.c) \
+	$(wildcard sensor_dispatcher/sensor_state/*.c) \
+	$(wildcard type/*.c) \
+	main.c
 
-# =========================
-# Object Files
-# =========================
-
+# 오브젝트
 OBJS = $(SRCS:.c=.o)
 
-# =========================
-# Include Path
-# =========================
-
-INCLUDES = -Icommon \
-           -Icontroller \
-           -Idecoder \
-           -Idecoder/hsms_header_parser \
-           -Idecoder/secs2_parser \
-           -Inetwork \
-           -Inetwork/hsms_receiver \
-           -Irun_server\
-           -Itype\
-
-# =========================
-# Build
-# =========================
-
+# 기본 타겟
 all: $(TARGET)
 
+# 링크
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $^
 
-# =========================
-# Compile Rule
-# =========================
-
+# 컴파일
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-# =========================
-# Clean
-# =========================
-
+# 정리
 clean:
 	rm -f $(OBJS) $(TARGET)
 
-# =========================
-# Rebuild
-# =========================
-
 re: clean all
+
+# 디버깅용
+print:
+	@echo "SRCS = $(SRCS)"

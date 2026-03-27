@@ -1,5 +1,5 @@
-#ifndef SENSOR_ID_UTILL_H
-#define SENSOR_ID_UTILL_H
+#ifndef SENSOR_ID_UTIL_H
+#define SENSOR_ID_UTIL_H
 
 #include "sensor_class.h"
 #include "common.h"
@@ -15,4 +15,5 @@
 // → 센서마다 정상 범위(min/max)를 얻기 위해 필요
 SensorClass* find_sensor_class(uint16_t sensor_id);
 
+void decode_sensor_id(uint16_t id, int *module, int *type, int *index);
 #endif

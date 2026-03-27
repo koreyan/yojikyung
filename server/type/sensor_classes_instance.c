@@ -1,4 +1,4 @@
-#include "sensor_id_utill.h"
+#include "sensor_id_util.h"
 #include "sensor_class.h"
 #include "sensor_id.h"
 
