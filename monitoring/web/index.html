@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Monitoring</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div id="container">
+      <!-- Sidebar -->
+      <div id="sidebar">
+        <button id="backBtn">← Back</button>
+        <div id="breadcrumb"></div>
+
+        <h3>Modules</h3>
+        <div id="moduleList"></div>
+      </div>
+
+      <!-- Content -->
+      <div id="content">
+        <h3 id="currentSensor">No sensor selected</h3>
+
+        <div id="sensorInfo">
+          Value: <span id="currentValue">-</span><br />
+          Avg: <span id="currentAvg">-</span><br />
+          Status: <span id="currentStatus">-</span>
+        </div>
+
+        <canvas id="chart"></canvas>
+
+        <div id="alerts"></div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

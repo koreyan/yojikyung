@@ -1,8 +1,8 @@
 # 컴파일러
 CC = gcc
 
-# 옵션
-CFLAGS = -Wall -Wextra -O2
+# 옵션 (디버깅용)
+CFLAGS = -Wall -Wextra -g -O0 -DDEBUG
 
 # include 경로
 INCLUDES = \
@@ -19,12 +19,14 @@ INCLUDES = \
 	-Isensor_dispatcher \
 	-Isensor_dispatcher/anomaly_detection \
 	-Isensor_dispatcher/moving_average \
-	-Isensor_dispatcher/sensor_state
+	-Isensor_dispatcher/sensor_state \
+	-Imonitor_server \
+	-Imonitor_server/json_builder
 
 # 실행파일
 TARGET = server
 
-# 소스 파일 (test 제외)
+# 소스 파일
 SRCS = \
 	$(wildcard controller/*.c) \
 	$(wildcard controller/debug/*.c) \
@@ -39,6 +41,8 @@ SRCS = \
 	$(wildcard sensor_dispatcher/moving_average/*.c) \
 	$(wildcard sensor_dispatcher/sensor_state/*.c) \
 	$(wildcard type/*.c) \
+	$(wildcard monitor_server/*.c) \
+	$(wildcard monitor_server/json_builder/*.c) \
 	main.c
 
 # 오브젝트

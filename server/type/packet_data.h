@@ -5,7 +5,7 @@
 #include "common.h"
 #include "sensordata.h"
 
-#define MAX_SENSORS 256
+#define MAX_SENSORS 128
 
 
 /* =========================

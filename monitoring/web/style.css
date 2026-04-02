@@ -1,0 +1,60 @@
+body {
+  margin: 0;
+  font-family: Arial;
+}
+
+#container {
+  display: flex;
+  height: 100vh;
+}
+
+#sidebar {
+  width: 300px;
+  border-right: 1px solid #ccc;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+#content {
+  flex: 1;
+  padding: 10px;
+}
+
+.item {
+  padding: 6px;
+  cursor: pointer;
+}
+
+.item:hover {
+  background: #eee;
+}
+
+.anomaly {
+  background-color: red;
+  color: white;
+}
+
+.selected {
+  border: 2px solid blue;
+}
+
+#alerts {
+  margin-top: 10px;
+  border-top: 1px solid #ccc;
+}
+
+#alerts .item {
+  cursor: pointer;
+}
+
+#alerts .item:hover {
+  background: darkred;
+}
+
+#currentStatus {
+  font-weight: bold;
+}
+
+.anomaly-text {
+  color: red;
+}

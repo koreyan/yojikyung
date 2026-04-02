@@ -16,14 +16,18 @@ void run_client_loop(int client_fd)
             printf("Client disconnected\n");
             break;
         }
-
+        printf("BEFORE ACCEPT\n");
+        monitor_accept_clients();   // 클라이언트 연결 처리
+        printf("AFTER ACCEPT\n");
         process_buffer(&rb);
     }
 }
 
 
 int run(){
-    int server_fd = create_server();
+    int server_fd = create_server(); // 장비용 서버 열기
+    monitor_server_init(9000);  // 모니터링용 서버 열기
+
     int client_fd = accept_client(server_fd);
 
     run_client_loop(client_fd);

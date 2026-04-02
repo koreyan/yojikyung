@@ -8,14 +8,14 @@
 ========================= */
 void handle_packet(uint8_t *packet, int len)
 {
-    // 1️⃣ RAW 확인
+    // RAW 확인
     // if (DEBUG){
     //     print_hex(packet, len);
     // }
 
     HSMSHeader h;
 
-    // 2️⃣ HSMS 파싱
+    // 1. HSMS 파싱
     parse_hsms_header(packet, &h);
 
     if(DEBUG){
@@ -23,16 +23,25 @@ void handle_packet(uint8_t *packet, int len)
         printf("Length: %u\n", h.length);
         printf("Stream: %d, Function: %d\n", h.stream, h.function);
     }
-    // 3️⃣ sanity check
+    // sanity check
     if (h.stream != 6 || h.function != 1)
     {
         printf("⚠️ Skip non S6F1 message\n");
         return;
     }
 
-    // 4️⃣ SECS 파싱
+    // 2. SECS 파싱
     PacketData pkt;
     decode_packet(packet, len, &pkt);
+
+
+    // 3. JSON 생성
+    char *json = build_json(&pkt);
+
+    // 4. 클라이언트에게 전송
+    monitor_send_all(json);
+
+
 
     if (DEBUG){
         printf("\n============================\n");
