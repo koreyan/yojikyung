@@ -1,7 +1,7 @@
 #include "controller.h"
 
 
-#define DEBUG 1
+#define DEBUG 0
 
 /* =========================
    패킷 처리 (Hook)
@@ -9,9 +9,9 @@
 void handle_packet(uint8_t *packet, int len)
 {
     // RAW 확인
-    // if (DEBUG){
-    //     print_hex(packet, len);
-    // }
+    if (DEBUG){
+        print_hex(packet, len);
+    }
 
     HSMSHeader h;
 
@@ -38,6 +38,7 @@ void handle_packet(uint8_t *packet, int len)
     // 3. JSON 생성
     char *json = build_json(&pkt);
 
+
     // 4. 클라이언트에게 전송
     monitor_send_all(json);
 
@@ -53,12 +54,6 @@ void handle_packet(uint8_t *packet, int len)
         {
             print_sensor(&pkt.sensors[i], i);
         }
-    }
-   
-
-    for (int i = 0; i < pkt.count; i++)
-    {
-        process_sensor(&pkt.sensors[i]);
     }
 
 

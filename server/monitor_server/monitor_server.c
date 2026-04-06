@@ -87,11 +87,9 @@ void monitor_accept_clients()
 // =========================
 // 클라이언트 전송 (안전)
 // =========================
-#include <arpa/inet.h> // htonl
 
 void monitor_send_all(const char *msg)
 {
-    printf("monitor_send_all 실행\n");
 
     uint32_t msg_len = strlen(msg);
     uint32_t net_len = htonl(msg_len); // 네트워크 바이트 순서

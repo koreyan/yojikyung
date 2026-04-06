@@ -10,15 +10,13 @@ void run_client_loop(int client_fd)
 
     while (1)
     {
-        int ret = recv_data(client_fd, &rb);
+        int ret = recv_data(client_fd, &rb); // 장비로부터 데이터를 받음
 
         if (ret <= 0) {
             printf("Client disconnected\n");
             break;
         }
-        printf("BEFORE ACCEPT\n");
-        monitor_accept_clients();   // 클라이언트 연결 처리
-        printf("AFTER ACCEPT\n");
+        monitor_accept_clients();   // 모니터링 클라이언트 연결 처리
         process_buffer(&rb);
     }
 }
@@ -28,7 +26,7 @@ int run(){
     int server_fd = create_server(); // 장비용 서버 열기
     monitor_server_init(9000);  // 모니터링용 서버 열기
 
-    int client_fd = accept_client(server_fd);
+    int client_fd = accept_client(server_fd); // 장비 클라이언트가 들어올 때까지 대기 
 
     run_client_loop(client_fd);
 

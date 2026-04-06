@@ -5,7 +5,6 @@
 #include "hsms_receiver.h"
 #include "decoder.h"
 #include "packet_data.h"
-#include "process_sensor.h"
 #include "monitor_server.h"
 #include "json_builder.h"
 #include "debug.h"

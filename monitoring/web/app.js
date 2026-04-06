@@ -1,11 +1,6 @@
-// =============================
-// 상태
-// =============================
 const state = { modules: {} };
-
 let chart = null;
 let selectedSensor = null;
-
 let navigation = {
   level: "module",
   moduleKey: null,
@@ -14,9 +9,6 @@ let navigation = {
   type: null,
 };
 
-// =============================
-// 이름 매핑
-// =============================
 const MODULE_NAMES = {
   0: "Bond Head",
   1: "Stage",
@@ -27,358 +19,201 @@ const MODULE_NAMES = {
   6: "Environment",
   7: "Power",
 };
-
 const TYPE_NAMES = {
   0: "Temperature",
   2: "Force",
   3: "Ultrasonic Power",
   4: "Position Encoder",
   5: "Motor Current",
-  6: "Motor Voltage",
-  7: "Motor Speed",
   8: "Vibration",
   9: "Vacuum Pressure",
-  10: "Flow",
-  11: "Vision Alignment",
-  12: "Defect Detection",
-  13: "Humidity",
-  14: "Airflow",
   15: "Power Consumption",
 };
 
-// =============================
-// main
-// =============================
 function main() {
   initChart();
   setupBackButton();
+  renderList(); // 💡 초기 리스트 렌더링 추가
   connectWebSocket();
 }
 
-// =============================
-// WebSocket
-// =============================
-function connectWebSocket() {
-  const ws = new WebSocket("ws://localhost:8080");
-
-  ws.onmessage = (e) => handleMessage(e.data);
-}
-
-// =============================
-// 데이터 처리
-// =============================
-function handleMessage(data) {
-  const json = JSON.parse(data);
-
-  resetAnomalyFlags();
-  updateState(json);
-  renderModuleList();
-  updateSelectedSensorChart();
-}
-
-function updateState(json) {
-  json.sensors.forEach(updateSensor);
-}
-
-function updateSensor(sensor) {
-  const { id, m, t, avg, anomaly } = sensor;
-
-  const module = getOrCreateModule(m);
-  const type = getOrCreateType(module, t);
-  const s = getOrCreateSensor(type, id);
-
-  s.id = id;
-  s.m = m;
-  s.t = t;
-
-  updateSensorHistory(s, avg);
-  updateAnomaly(s, type, module, anomaly);
-}
-
-// =============================
-// 상태 생성
-// =============================
-function getOrCreateModule(m) {
-  if (!state.modules[m]) {
-    state.modules[m] = { types: {}, anomaly: false };
-  }
-  return state.modules[m];
-}
-
-function getOrCreateType(module, t) {
-  if (!module.types[t]) {
-    module.types[t] = { sensors: {}, anomaly: false };
-  }
-  return module.types[t];
-}
-
-function getOrCreateSensor(type, id) {
-  if (!type.sensors[id]) {
-    type.sensors[id] = { history: [], anomaly: false };
-  }
-  return type.sensors[id];
-}
-
-// =============================
-// 데이터 처리
-// =============================
-function updateSensorHistory(sensor, avg) {
-  sensor.history.push({
-    x: Date.now(),
-    y: avg,
-    anomaly: sensor.anomaly,
-  });
-
-  if (sensor.history.length > 100) {
-    sensor.history.shift();
-  }
-}
-
-function updateAnomaly(sensor, type, module, anomaly) {
-  sensor.anomaly = anomaly === 1;
-
-  if (sensor.anomaly) {
-    type.anomaly = true;
-    module.anomaly = true;
-    addAlert(sensor);
-  }
-}
-
-function resetAnomalyFlags() {
-  for (let m in state.modules) {
-    state.modules[m].anomaly = false;
-
-    for (let t in state.modules[m].types) {
-      state.modules[m].types[t].anomaly = false;
-    }
-  }
-}
-
-// =============================
-// UI 렌더링
-// =============================
-function renderModuleList() {
-  navigation.level = "module";
-  navigation.moduleKey = null;
-  navigation.typeKey = null;
-
-  updateBreadcrumb();
-
-  const container = document.getElementById("moduleList");
-  container.innerHTML = "";
-
-  for (let m in state.modules) {
-    const el = createModuleElement(m, state.modules[m]);
-    container.appendChild(el);
-  }
-}
-
-function createModuleElement(m, module) {
-  const div = document.createElement("div");
-  div.className = "item";
-  if (module.anomaly) div.classList.add("anomaly");
-
-  div.textContent = MODULE_NAMES[m] || m;
-
-  div.onclick = () => {
-    navigation.level = "type";
-    navigation.moduleKey = m;
-    navigation.module = module;
-
-    renderTypeList(module);
-    updateBreadcrumb();
-  };
-
-  return div;
-}
-
-function renderTypeList(module) {
-  const container = document.getElementById("moduleList");
-  container.innerHTML = "";
-
-  for (let t in module.types) {
-    container.appendChild(createTypeElement(t, module.types[t]));
-  }
-}
-
-function createTypeElement(t, type) {
-  const div = document.createElement("div");
-  div.className = "item";
-  if (type.anomaly) div.classList.add("anomaly");
-
-  div.textContent = TYPE_NAMES[t] || t;
-
-  div.onclick = () => {
-    navigation.level = "sensor";
-    navigation.typeKey = t;
-    navigation.type = type;
-
-    renderSensorList(type);
-    updateBreadcrumb();
-  };
-
-  return div;
-}
-
-function renderSensorList(type) {
-  const container = document.getElementById("moduleList");
-  container.innerHTML = "";
-
-  for (let id in type.sensors) {
-    container.appendChild(createSensorElement(id, type.sensors[id]));
-  }
-}
-
-function createSensorElement(id, sensor) {
-  const div = document.createElement("div");
-  div.className = "item";
-
-  if (sensor.anomaly) div.classList.add("anomaly");
-  if (sensor === selectedSensor) div.classList.add("selected");
-
-  div.textContent = `#${id & 0xff}`;
-  div.onclick = () => selectSensor(sensor);
-
-  return div;
-}
-
-// =============================
-// navigation
-// =============================
-function setupBackButton() {
-  document.getElementById("backBtn").onclick = handleBack;
-}
-
-function handleBack() {
-  if (navigation.level === "sensor") {
-    navigation.level = "type";
-    renderTypeList(navigation.module);
-  } else if (navigation.level === "type") {
-    renderModuleList();
-  }
-
-  updateBreadcrumb();
-}
-
-function updateBreadcrumb() {
-  const el = document.getElementById("breadcrumb");
-
-  let text = "Modules";
-
-  if (navigation.moduleKey !== null) {
-    text += ` > ${MODULE_NAMES[navigation.moduleKey]}`;
-  }
-
-  if (navigation.typeKey !== null) {
-    text += ` > ${TYPE_NAMES[navigation.typeKey]}`;
-  }
-
-  el.textContent = text;
-}
-
-// =============================
-// 센서 선택
-// =============================
-function selectSensor(sensor) {
-  selectedSensor = sensor;
-
-  updateChart(sensor);
-  updateSensorInfo(sensor);
-}
-
-// =============================
-// Chart
-// =============================
 function initChart() {
-  const ctx = document.getElementById("chart").getContext("2d");
-
+  const canvas = document.getElementById("chartCanvas");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
   chart = new Chart(ctx, {
     type: "line",
     data: { datasets: [] },
-    options: { animation: false },
+    options: {
+      animation: false,
+      maintainAspectRatio: false,
+      scales: {
+        x: { display: false },
+        y: {
+          grid: { color: "rgba(255,255,255,0.05)" },
+          ticks: { color: "#89919d" },
+        },
+      },
+      plugins: { legend: { display: false } },
+    },
   });
 }
 
-function updateChart(sensor) {
+function connectWebSocket() {
+  // 💡 127.0.0.1로 변경하여 접속 안정성 확보
+  const ws = new WebSocket("ws://127.0.0.1:8080");
+
+  ws.onopen = () => console.log("✅ 대시보드가 서버에 연결되었습니다.");
+  ws.onerror = (err) =>
+    console.error("❌ 서버 연결 실패. Relay 서버를 확인하세요.");
+
+  ws.onmessage = (e) => {
+    const json = JSON.parse(e.data);
+
+    if (json.timestamp) {
+      const latency = Date.now() - json.timestamp;
+      const display = document.querySelector("#latencyDisplay span:last-child");
+      if (display) display.textContent = latency + "ms";
+    }
+
+    json.sensors.forEach((s) => {
+      if (!state.modules[s.m])
+        state.modules[s.m] = { types: {}, anomaly: false };
+      if (!state.modules[s.m].types[s.t])
+        state.modules[s.m].types[s.t] = { sensors: {}, anomaly: false };
+      if (!state.modules[s.m].types[s.t].sensors[s.id])
+        state.modules[s.m].types[s.t].sensors[s.id] = {
+          history: [],
+          anomaly: false,
+        };
+
+      const sensor = state.modules[s.m].types[s.t].sensors[s.id];
+      sensor.id = s.id;
+      sensor.m = s.m;
+      sensor.t = s.t;
+      sensor.history.push({ x: Date.now(), y: s.avg, value: s.value });
+      if (sensor.history.length > 50) sensor.history.shift();
+      sensor.anomaly = s.anomaly === 1;
+
+      // 상위 객체에 이상 징후 전파
+      if (sensor.anomaly) {
+        state.modules[s.m].anomaly = true;
+        state.modules[s.m].types[s.t].anomaly = true;
+      }
+    });
+
+    renderList();
+    updateSelectedUI();
+  };
+}
+
+function renderList() {
+  const container = document.getElementById("moduleList");
+  if (!container) return;
+
+  // 리스트가 실시간으로 깜빡이는 것을 방지하기 위해 내용이 바뀔 때만 갱신하는 것이 좋으나
+  // 우선은 구조적 정확성을 위해 초기화 후 생성합니다.
+  container.innerHTML = "";
+
+  let items = {};
+  if (navigation.level === "module") items = state.modules;
+  else if (navigation.level === "type") items = navigation.module.types;
+  else items = navigation.type.sensors;
+
+  Object.entries(items).forEach(([key, val]) => {
+    const div = document.createElement("div");
+    const isAnomaly = val.anomaly;
+
+    div.className = `flex items-center justify-between px-4 py-3 cursor-pointer border-l-4 transition-all ${
+      isAnomaly
+        ? "bg-red-500/10 border-red-500 text-red-400"
+        : "border-transparent hover:bg-white/5 text-[#e5e2e1]"
+    }`;
+
+    let label = "";
+    if (navigation.level === "module")
+      label = MODULE_NAMES[key] || `Module ${key}`;
+    else if (navigation.level === "type")
+      label = TYPE_NAMES[key] || `Type ${key}`;
+    else label = `Sensor #${key & 0xff}`;
+
+    div.innerHTML = `
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-sm">${isAnomaly ? "warning" : "adjust"}</span>
+                <span>${label}</span>
+            </div>
+            <span class="material-symbols-outlined text-xs opacity-50">chevron_right</span>
+        `;
+
+    div.onclick = () => {
+      if (navigation.level === "module") {
+        navigation.level = "type";
+        navigation.module = val;
+        navigation.moduleKey = key;
+      } else if (navigation.level === "type") {
+        navigation.level = "sensor";
+        navigation.type = val;
+        navigation.typeKey = key;
+      } else {
+        selectedSensor = val;
+      }
+      renderList();
+    };
+    container.appendChild(div);
+  });
+
+  // 브레드크럼 업데이트
+  let path = "ROOT";
+  if (navigation.moduleKey) path += ` > ${MODULE_NAMES[navigation.moduleKey]}`;
+  if (navigation.typeKey) path += ` > ${TYPE_NAMES[navigation.typeKey]}`;
+  const bc = document.getElementById("breadcrumb");
+  if (bc) bc.textContent = path;
+}
+
+function updateSelectedUI() {
+  if (!selectedSensor) return;
+  const last = selectedSensor.history[selectedSensor.history.length - 1];
+  if (!last) return;
+
+  // 데이터 주입
+  const valEl = document.getElementById("currentValue");
+  const avgEl = document.getElementById("currentAvg");
+  const statEl = document.getElementById("currentStatus");
+  const titleEl = document.querySelector("#currentSensor h2");
+
+  if (valEl) valEl.textContent = last.value.toFixed(3);
+  if (avgEl) avgEl.textContent = last.y.toFixed(3);
+  if (statEl) {
+    statEl.textContent = selectedSensor.anomaly ? "CRITICAL" : "OPERATIONAL";
+    statEl.className = `text-xl font-bold mt-1 ${selectedSensor.anomaly ? "text-red-400" : "text-primary"}`;
+  }
+  if (titleEl)
+    titleEl.textContent = `${MODULE_NAMES[selectedSensor.m]} / Sensor #${selectedSensor.id & 0xff}`;
+
+  // 차트 업데이트
   chart.data.datasets = [
     {
-      data: sensor.history,
-      borderColor: "blue",
-      pointBackgroundColor: sensor.history.map((p) =>
-        p.anomaly ? "red" : "blue",
-      ),
+      data: selectedSensor.history,
+      borderColor: "#9ecaff",
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: true,
+      backgroundColor: "rgba(158, 202, 255, 0.05)",
+      tension: 0.4,
     },
   ];
-
   chart.update("none");
 }
 
-function updateSelectedSensorChart() {
-  if (!selectedSensor) return;
-
-  updateChart(selectedSensor);
-  updateSensorInfo(selectedSensor);
-}
-
-// =============================
-// 센서 정보
-// =============================
-function updateSensorInfo(sensor) {
-  const last = sensor.history[sensor.history.length - 1];
-  if (!last) return;
-
-  document.getElementById("currentValue").textContent = last.y.toFixed(3);
-  document.getElementById("currentAvg").textContent = last.y.toFixed(3);
-
-  const status = document.getElementById("currentStatus");
-
-  if (last.anomaly) {
-    status.textContent = "ANOMALY";
-    status.classList.add("anomaly-text");
-  } else {
-    status.textContent = "NORMAL";
-    status.classList.remove("anomaly-text");
+function setupBackButton() {
+  const btn = document.getElementById("backBtn");
+  if (btn) {
+    btn.onclick = () => {
+      if (navigation.level === "sensor") navigation.level = "type";
+      else if (navigation.level === "type") navigation.level = "module";
+      renderList();
+    };
   }
 }
 
-// =============================
-// Alert → 이동
-// =============================
-function addAlert(sensor) {
-  const container = document.getElementById("alerts");
-
-  const div = document.createElement("div");
-  div.className = "item anomaly";
-
-  div.textContent = `⚠ ${MODULE_NAMES[sensor.m]} / ${TYPE_NAMES[sensor.t]} / #${sensor.id & 0xff}`;
-
-  div.onclick = () => navigateToSensor(sensor);
-
-  container.prepend(div);
-
-  if (container.children.length > 10) {
-    container.removeChild(container.lastChild);
-  }
-}
-
-function navigateToSensor(sensor) {
-  const module = state.modules[sensor.m];
-  const type = module.types[sensor.t];
-  const target = type.sensors[sensor.id];
-
-  navigation.level = "sensor";
-  navigation.moduleKey = sensor.m;
-  navigation.typeKey = sensor.t;
-  navigation.module = module;
-  navigation.type = type;
-
-  renderSensorList(type);
-  updateBreadcrumb();
-
-  selectSensor(target);
-}
-
-// =============================
-// 실행
-// =============================
 main();

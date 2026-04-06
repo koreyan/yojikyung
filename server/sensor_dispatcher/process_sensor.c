@@ -1,5 +1,8 @@
 #include "process_sensor.h"
 
+#define DEBUG 1
+
+
 
 void process_sensor(SensorData *data)
 {
@@ -12,9 +15,12 @@ void process_sensor(SensorData *data)
     int m, t, i;
     decode_sensor_id(data->sensor_id, &m, &t, &i);
 
-    printf("M=%d T=%d I=%d | val=%.3f | avg=%.3f | %s\n",
+    if(DEBUG){
+        printf("M=%d T=%d I=%d | val=%.3f | avg=%.3f | %s\n",
            m, t, i,
            data->value,
            avg,
            is_anomaly ? "🚨 ANOMALY" : "OK");
+    }
+   
 }

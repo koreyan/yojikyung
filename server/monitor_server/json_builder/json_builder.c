@@ -1,4 +1,17 @@
 #include "json_builder.h"
+#define DEBUG 1
+
+
+void print_sensor_log(int m, int t, int idx,
+                      float value, float avg, int anomaly)
+{
+
+    printf("M=%d T=%d I=%d | val=%.3f | avg=%.3f | %s\n",
+           m, t, idx,
+           value,
+           avg,
+           anomaly ? "🚨 ANOMALY" : "OK");
+}
 
 
 // =========================
@@ -43,6 +56,10 @@ char* build_json(PacketData *pkt)
         SensorState *state = get_sensor_state(s.sensor_id);
         float avg = update_moving_average(state, s.value);
         int anomaly = detect_anomaly(s.sensor_id, s.value);
+
+        if (DEBUG){
+            print_sensor_log(m, t, idx, s.value, avg, anomaly);
+        }
 
         written = snprintf(
             json + len,
