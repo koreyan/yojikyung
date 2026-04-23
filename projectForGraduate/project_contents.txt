@@ -1,0 +1,3102 @@
+▣ PROJECT SOURCE CODE LOG: real_time_data_processing_system
+▣ Generated Date: 2026-04-23
+
+
+================================================================================
+ FILE: common.h 
+================================================================================
+
+#ifndef COMMON_H
+#define COMMON_H
+
+#include <stdio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <time.h>
+#include <sys/time.h>
+
+
+#endif
+
+
+================================================================================
+ FILE: data_generator.c 
+================================================================================
+
+#include "data_generator.h"
+
+
+static void add_sensor(Sensor sensors[], int *i, Module module, SensorType type, uint8_t index, int period)
+{
+    sensors[*i].sensor_id = MAKE_SENSOR_ID(module,type,index);
+    sensors[*i].period_ms = period;
+    // 센서 생성 시 초기 타이밍을 랜덤하게 분산
+    sensors[*i].next_time_ms = get_time_ms() + (rand() % period);
+    (*i)++;
+}
+
+// 센서 초기화 
+// 센서 초기화 (총 128개)
+int init_sensors(Sensor sensors[])
+{
+    int i = 0;
+
+    //---------------- Bond Head ----------------
+    for(int k=0;k<6;k++) add_sensor(sensors,&i,MODULE_BOND_HEAD,SENSOR_TEMPERATURE,k,100);
+    for(int k=0;k<6;k++) add_sensor(sensors,&i,MODULE_BOND_HEAD,SENSOR_FORCE,k,50);
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_BOND_HEAD,SENSOR_ULTRASONIC_POWER,k,50);
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_BOND_HEAD,SENSOR_VIBRATION,k,200);
+
+    //---------------- Stage ----------------
+    for(int k=0;k<14;k++) add_sensor(sensors,&i,MODULE_STAGE,SENSOR_POSITION_ENCODER,k,20);
+    for(int k=0;k<6;k++) add_sensor(sensors,&i,MODULE_STAGE,SENSOR_MOTOR_CURRENT,k,50);
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_STAGE,SENSOR_MOTOR_VOLTAGE,k,50);
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_STAGE,SENSOR_MOTOR_SPEED,k,20);
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_STAGE,SENSOR_VIBRATION,k,200);
+
+    //---------------- Heater ----------------
+    for(int k=0;k<8;k++) add_sensor(sensors,&i,MODULE_HEATER,SENSOR_TEMPERATURE,k,200);
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_HEATER,SENSOR_POWER_CONSUMPTION,k,50);
+
+    //---------------- Vacuum ----------------
+    for(int k=0;k<8;k++) add_sensor(sensors,&i,MODULE_VACUUM,SENSOR_VACUUM_PRESSURE,k,100); 
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_VACUUM,SENSOR_FLOW,k,200);
+
+    //---------------- Motor / Drive ----------------
+    for(int k=0;k<10;k++) add_sensor(sensors,&i,MODULE_MOTOR_DRIVE,SENSOR_MOTOR_CURRENT,k,50); 
+    for(int k=0;k<6;k++) add_sensor(sensors,&i,MODULE_MOTOR_DRIVE,SENSOR_MOTOR_VOLTAGE,k,50);
+    for(int k=0;k<6;k++) add_sensor(sensors,&i,MODULE_MOTOR_DRIVE,SENSOR_MOTOR_SPEED,k,20);
+    for(int k=0;k<4;k++) add_sensor(sensors,&i,MODULE_MOTOR_DRIVE,SENSOR_VIBRATION,k,100);
+
+    //---------------- Vision ----------------
+    for(int k=0;k<5;k++) add_sensor(sensors,&i,MODULE_VISION,SENSOR_VISION_ALIGNMENT,k,100);
+    for(int k=0;k<5;k++) add_sensor(sensors,&i,MODULE_VISION,SENSOR_DEFECT_DETECTION,k,200);
+
+    //---------------- Environment ----------------
+    for(int k=0;k<5;k++) add_sensor(sensors,&i,MODULE_ENVIRONMENT,SENSOR_TEMPERATURE,k,1000); 
+    for(int k=0;k<2;k++) add_sensor(sensors,&i,MODULE_ENVIRONMENT,SENSOR_HUMIDITY,k,1000);
+    for(int k=0;k<3;k++) add_sensor(sensors,&i,MODULE_ENVIRONMENT,SENSOR_AIRFLOW,k,1000);
+
+    //---------------- Power ----------------
+    for(int k=0;k<6;k++) add_sensor(sensors,&i,MODULE_POWER,SENSOR_POWER_CONSUMPTION,k,500);
+
+    return i;
+}
+
+
+// 센서 초기값을 정상 범위 내에서 랜덤으로 설정
+// → 시작부터 자연스러운 값 분포 생성
+void init_sensor_states(SensorState* states, Sensor* sensors, int count)
+{
+    for (int i = 0; i < count; i++) {
+
+        SensorClass* cls = find_sensor_class(sensors[i].sensor_id);
+
+        states[i].sensor_id = sensors[i].sensor_id;
+
+        if (cls) {
+            // 정상 범위 내 랜덤 초기값
+            states[i].value = rand_float(cls->normal_min, cls->normal_max);
+        } else {
+            states[i].value = 0.0f; // fallback
+        }
+    }
+}
+
+
+
+// 센서 값을 "이전 값 기반으로" 업데이트
+// → 실제 장비처럼 값이 급격히 튀지 않고 자연스럽게 변함
+float update_sensor_value(float current, SensorClass* cls)
+{
+    float r = (float)rand() / RAND_MAX;
+
+    // 1. 매우 낮은 확률로 이상 값 생성
+    if (r < ABNORMAL_PROB) {
+
+        float range = cls->normal_max - cls->normal_min;
+
+        // 정상 범위를 벗어나도록 크게 튀게 만듦
+        if (rand() % 2) {
+            // 상한 초과
+            return cls->normal_max + range * rand_float(0.5f, 2.0f);
+        } else {
+            // 하한 미만
+            return cls->normal_min - range * rand_float(0.5f, 2.0f);
+        }
+    }
+
+    // 2. 정상 상태 → 미세한 변화
+    float range = cls->normal_max - cls->normal_min;
+
+    // 변화량 (범위 대비 1%)
+    float delta = range * DELTA_RATIO;
+
+    // -delta ~ +delta 범위의 랜덤 변화
+    float change = rand_float(-delta, delta);
+
+    float next = current + change;
+
+    // 3. 정상 범위를 벗어나지 않도록 보정
+    return clamp(next, cls->normal_min, cls->normal_max);
+}
+
+
+
+// 현재 상태(states)를 기반으로 SensorData 배열 생성
+// → HSMS 전송 직전에 호출되는 핵심 함수
+// 센서 주기(period_ms)를 기반으로 "지금 생성해야 할 센서만" 데이터 생성
+// → 각 센서의 next_time_ms와 현재 시간(now)을 비교하여 선택적으로 생성
+void generate_sensor_data_with_period(Sensor* sensors, SensorState* states, SensorData* out, int sensor_count, uint64_t now, int* out_count)
+{
+    int idx = 0; // 이번 패킷에 담을 데이터 개수
+
+    for (int i = 0; i < sensor_count; i++)
+    {
+        // 아직 생성할 시간이 안 된 센서는 skip
+        if (now < sensors[i].next_time_ms)
+            continue;
+
+        // 센서 클래스 (정상 범위 정보) 찾기
+        SensorClass* cls = find_sensor_class(states[i].sensor_id);
+        if (!cls)
+            continue;
+
+        // 현재 값을 기반으로 다음 값 생성 (미세 변화 + 이상치 포함)
+        states[i].value = update_sensor_value(states[i].value, cls);
+
+        // 전송용 데이터에 기록
+        out[idx].sensor_id = states[i].sensor_id;
+        out[idx].value     = states[i].value;
+
+        idx++;
+
+        // 다음 생성 시각 업데이트
+        // → 현재 시간 기준으로 period를 더함
+        sensors[i].next_time_ms = now + sensors[i].period_ms;
+    }
+
+    // 실제 생성된 센서 개수 반환
+    *out_count = idx;
+}
+
+
+================================================================================
+ FILE: data_generator.h 
+================================================================================
+
+#ifndef DATA_GENERATOR_H
+#define DATA_GENERATOR_H
+#include "common.h"
+#include "sensor_type.h"
+#include "sensor_class.h"
+#include "sensor_state.h"
+#include "sensor_data.h"
+#include "sensor_id.h"
+#include "sensor_id_utill.h"
+
+#include "util.h"
+
+#define ABNORMAL_PROB 0.0001f   // 0.01% 확률로 이상치 발생
+#define DELTA_RATIO   0.01f     // 변화 폭 (전체 범위의 1%)
+
+
+//------------------------------------------------------------
+// 센서 구성 생성
+//------------------------------------------------------------
+int init_sensors(Sensor sensors[]);
+
+// 센서 초기값을 정상 범위 내에서 랜덤으로 설정
+// → 시작부터 자연스러운 값 분포 생성
+void init_sensor_states(SensorState* states, Sensor* sensors, int count);
+
+// 센서 값을 "이전 값 기반으로" 업데이트
+// → 실제 장비처럼 값이 급격히 튀지 않고 자연스럽게 변함
+float update_sensor_value(float current, SensorClass* cls);
+
+// 현재 상태(states)를 기반으로 SensorData 배열 생성
+// → HSMS 전송 직전에 호출되는 핵심 함수
+// 센서 주기(period_ms)를 기반으로 "지금 생성해야 할 센서만" 데이터 생성
+// → 각 센서의 next_time_ms와 현재 시간(now)을 비교하여 선택적으로 생성
+void generate_sensor_data_with_period(Sensor* sensors, SensorState* states, SensorData* out, int sensor_count, uint64_t now, int* out_count);
+
+
+
+#endif 
+
+
+================================================================================
+ FILE: main.c 
+================================================================================
+
+#include "./run/run_equipment.h"
+// #include "./debug/debug.h"
+
+
+int main(){
+    run();
+}
+
+
+
+================================================================================
+ FILE: network.c 
+================================================================================
+
+#include "network.h"
+
+
+// 서버와 TCP 연결을 생성하고 연결된 socket fd를 반환하는 함수
+int connect_server(){
+    printf("connecting...");
+    // socket 생성
+    // AF_INET : IPv4 주소 체계 사용
+    // SOCK_STREAM : TCP 프로토콜 사용
+    // 0 : 기본 프로토콜 선택 (TCP)
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    if(sock < 0){
+        perror("socket failed");
+        exit(1);
+    }
+    
+    // 서버 주소 정보를 저장할 구조체
+    struct sockaddr_in server;
+
+    // 사용할 주소 체계 설정 (IPv4)
+    server.sin_family = AF_INET;
+
+    // 포트 번호 설정
+    // htons() : host byte order -> network byte order 변환
+    // 네트워크에서는 big-endian 형식을 사용하기 때문에 변환 필요
+    server.sin_port = htons(PORT);
+
+    // 문자열 형태의 IP 주소를 binary 형태로 변환
+    inet_pton(AF_INET, SERVER_IP, &server.sin_addr);
+
+    // 서버에 연결 요청
+    // sock : 사용할 소켓
+    // (struct sokaddr*): sockaddr_in을 일반 sockaddr로 캐스팅
+    // sizof(server) : 주소 구조체 크기
+    if(connect(sock, (struct sockaddr*)&server, sizeof(server)) < 0){
+        perror("connect failed");
+        exit(1);
+    }
+
+    // 연결 성공 메시지 출력
+    printf("Connected to server\n");
+    return sock;
+}
+
+
+
+================================================================================
+ FILE: network.h 
+================================================================================
+
+#ifndef NETWORK_H
+#define NETWORK_H
+
+#include "common.h"
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define SERVER_IP "127.0.0.1"
+#define PORT 12345
+
+// 서버와 TCP 연결을 생성하고 연결된 socket fd를 반환하는 함수
+int connect_server();
+
+#endif
+
+
+================================================================================
+ FILE: packet.c 
+================================================================================
+
+#include "packet.h"
+
+#define FIXED_SIZE 4096
+static uint32_t g_sys = 1;
+
+// HSMS Header 생성
+void build_hsms_header(HSMSHeader* h,
+                       uint16_t session_id,
+                       uint8_t stream,
+                       uint8_t function,
+                       uint8_t s_type,
+                       uint32_t body_len)
+{
+    h->length = htonl(body_len);     // body 길이
+    h->session_id = htons(session_id);
+
+    h->stream = stream;              // SxFy
+    h->function = function;
+
+    h->p_type = 0;                   // SECS-II
+    h->s_type = s_type;              // data = 0
+
+    h->system_bytes = htonl(g_sys++);
+}
+
+
+// S6F1 구조: timestamp + count + sensor list 생성
+uint32_t build_secs_body(uint8_t* buffer,
+                         uint64_t timestamp,
+                         SensorData* data,
+                         uint16_t count)
+{
+    uint8_t* p = buffer;
+
+    p = write_list(p, 3);         // [timestamp, count, data list]
+
+    p = write_u8(p, timestamp);  // timestamp
+    p = write_u2(p, count);      // sensor 개수
+
+    p = write_list(p, count);    // sensor list
+
+    for (int i = 0; i < count; i++) {
+        p = write_list(p, 2);    // [sensor_id, value]
+
+        p = write_u2(p, data[i].sensor_id);
+        p = write_f4(p, data[i].value);
+    }
+
+    return (uint32_t)(p - buffer);
+}
+
+// HSMS 패킷 생성 후 전송 (고정패킷방식으로 변경)
+int send_sensor_packet(int sock,
+                       uint64_t timestamp,
+                       SensorData* data,
+                       uint16_t count)
+{
+    // [수정사항] 스택 메모리 낭비를 줄이기 위해 버퍼 하나로 통합 관리 가능하지만, 
+    // 기존 구조를 유지하며 안전하게 0으로 초기화합니다.
+    uint8_t body[FIXED_SIZE];
+    uint8_t packet[FIXED_SIZE];
+
+    // [수정사항] 전송 버퍼 전체를 0으로 초기화 (나머지 공간은 패딩 처리됨)
+    memset(packet, 0, FIXED_SIZE);
+    memset(body, 0, FIXED_SIZE);
+
+    // 1. SECS-II Body 생성
+    uint32_t body_len = build_secs_body(body, timestamp, data, count);
+
+    // 2. HSMS Header 생성
+    HSMSHeader header;
+    build_hsms_header(&header, 0, 6, 1, 0, body_len);
+
+    // 3. Header + Body 결합
+    memcpy(packet, &header, sizeof(header));
+    memcpy(packet + sizeof(header), body, body_len);
+
+    // [수정사항] total_size 변수는 실제 데이터 크기 확인용으로만 사용
+    uint32_t actual_data_size = sizeof(header) + body_len;
+
+    // [수정사항] 기존 total_size 대신 무조건 FIXED_SIZE(4096)를 보냄
+    // 이로써 서버는 항상 4096바이트씩 끊어 읽을 수 있는 '경계'를 갖게 됩니다.
+    return send(sock, packet, FIXED_SIZE, 0);
+}
+
+
+================================================================================
+ FILE: packet.h 
+================================================================================
+
+#ifndef PACKET_H
+#define PACKET_H
+#include "common.h"
+#include "hsms.h"
+#include "sensor_data.h"
+#include "secs2.h"
+#include "network.h"
+
+// HSMS 패킷 생성 후 전송
+int send_sensor_packet(int sock, uint64_t timestamp, SensorData* data, uint16_t count);
+
+#endif
+
+
+================================================================================
+ FILE: hsms.h 
+================================================================================
+
+#ifndef HSMS_H
+#define HSMS_H
+
+#include "common.h"
+
+#pragma pack(push, 1)
+typedef struct {
+    uint32_t length;        // SECS-II body 전체 길이 (header 제외)
+    uint16_t session_id;    // HSMS 세션 식별자
+
+    uint8_t  stream;        // SECS Stream 번호 (SxFy의 S)
+    uint8_t  function;      // SECS Function 번호 (SxFy의 F)
+
+    uint8_t  p_type;        // 프로토콜 타입 (0 = SECS-II)
+    uint8_t  s_type;        // 메시지 타입 (data / control 구분)
+
+    uint32_t system_bytes;  // 요청-응답 매칭용 ID
+} HSMSHeader;
+#pragma pack(pop)
+
+
+#endif
+
+
+================================================================================
+ FILE: secs2.c 
+================================================================================
+
+#include "secs2.h"
+
+// SECS-II의 [Format+LB][Length] 영역을 생성하는 함수
+uint8_t* write_item_header(uint8_t* p, uint8_t type, uint32_t len)
+{
+    uint8_t lb;
+
+    if (len <= 0xFF)        lb = 1;
+    else if (len <= 0xFFFF) lb = 2;
+    else                    lb = 3;
+
+    *p++ = SECS_ITEM(type, lb);  // 타입 + Length Byte 개수 인코딩
+    p = write_length(p, len, lb); // 실제 데이터 길이를 big-endian으로 기록
+
+    return p;
+}
+
+//  SECS-II Length 필드를 big-endian으로 기록
+uint8_t* write_length(uint8_t* p, uint32_t len, uint8_t lb)
+{
+    for (int i = lb - 1; i >= 0; i--) {
+        p[i] = len & 0xFF;
+        len >>= 8;
+    }
+    return p + lb;
+}
+
+
+// 모든 숫자 타입을 big-endian으로 변환하여 SECS-II로 인코딩
+uint8_t* write_primitive_be(uint8_t* p, uint8_t type, uint64_t value, uint32_t size)
+{
+    uint8_t buf[8];
+
+    for (int i = 0; i < size; i++) {
+        buf[size - 1 - i] = (value >> (8 * i)) & 0xFF;
+    }
+
+    p = write_item_header(p, type, size); // 타입 + 길이
+    memcpy(p, buf, size);                 // 데이터 복사
+
+    return p + size;
+}
+
+// LIST 시작, 하위 요소 개수 지정
+uint8_t* write_list(uint8_t* p, uint32_t count)
+{
+    return write_item_header(p, SECS_L, count);
+}
+
+// uint16 값을 U2 타입으로 인코딩
+uint8_t* write_u2(uint8_t* p, uint16_t v)
+{
+    return write_primitive_be(p, SECS_U2, v, 2);
+}
+
+// uint64 값을 U8 타입으로 인코딩
+uint8_t* write_u8(uint8_t* p, uint64_t v)
+{
+    return write_primitive_be(p, SECS_U8, v, 8);
+}
+
+// float 값을 F4 타입으로 인코딩
+uint8_t* write_f4(uint8_t* p, float v)
+{
+    uint32_t tmp;
+    memcpy(&tmp, &v, 4);
+    return write_primitive_be(p, SECS_F4, tmp, 4);
+}
+
+
+================================================================================
+ FILE: secs2.h 
+================================================================================
+
+#ifndef SECS2_H
+#define SECS2_H
+
+#include "common.h"
+
+//------------------------------------------------------------
+// SECS-II Format Code (Length Byte = 1 기준)
+//------------------------------------------------------------
+
+// List
+#define SECS_L      0x01
+
+// Binary
+#define SECS_B      0x21
+
+// Boolean
+#define SECS_BOOL   0x25
+
+// ASCII
+#define SECS_A      0x41
+
+// Signed Integer
+#define SECS_I1     0x65
+#define SECS_I2     0x69
+#define SECS_I4     0x71
+#define SECS_I8     0x61
+
+// Floating Point
+#define SECS_F4     0x91
+#define SECS_F8     0x81
+
+// Unsigned Integer
+#define SECS_U1     0xA5
+#define SECS_U2     0xA9
+#define SECS_U4     0xB1
+#define SECS_U8     0xA1
+
+
+//------------------------------------------------------------
+// Format Code + Length Byte 조합
+//------------------------------------------------------------
+//  SECS-II Item의 "타입 + Length Byte 정보"를 만드는 1바이트
+#define SECS_ITEM(type, lb)   ((type) + ((lb) - 1))
+
+
+
+// SECS-II의 [Format+LB][Length] 영역을 생성하는 함수
+uint8_t* write_item_header(uint8_t* p, uint8_t type, uint32_t len);
+//  SECS-II Length 필드를 big-endian으로 기록
+uint8_t* write_length(uint8_t* p, uint32_t len, uint8_t lb);
+// LIST 시작, 하위 요소 개수 지정
+uint8_t* write_list(uint8_t* p, uint32_t count);
+
+
+
+
+//------------------------------------------------------------
+//  SECS-II로 인코딩 
+//------------------------------------------------------------
+
+// 모든 숫자 타입을 big-endian으로 변환하여 SECS-II로 인코딩
+uint8_t* write_primitive_be(uint8_t* p, uint8_t type, uint64_t value, uint32_t size);
+// uint16 값을 U2 타입으로 인코딩
+uint8_t* write_u2(uint8_t* p, uint16_t v);
+// uint64 값을 U8 타입으로 인코딩
+uint8_t* write_u8(uint8_t* p, uint64_t v);
+// float 값을 F4 타입으로 인코딩
+uint8_t* write_f4(uint8_t* p, float v);
+#endif
+
+
+================================================================================
+ FILE: run_equipment.c 
+================================================================================
+
+#include "run_equipment.h"
+#include "sensor_id.h"
+
+
+//==========================================================디버깅용=======================================================
+// sensor_id → module / type / index 분리
+void decode_sensor_id(uint16_t id,
+                      uint8_t* module,
+                      uint8_t* type,
+                      uint8_t* index)
+{
+    *module = (id >> 12) & 0x0F;
+    *type   = (id >> 8)  & 0x0F;
+    *index  = id & 0xFF;
+}
+
+
+// Module 이름 반환
+const char* module_to_str(uint8_t m)
+{
+    switch (m) {
+        case MODULE_BOND_HEAD: return "BOND_HEAD";
+        case MODULE_STAGE: return "STAGE";
+        case MODULE_HEATER: return "HEATER";
+        case MODULE_VACUUM: return "VACUUM";
+        case MODULE_MOTOR_DRIVE: return "MOTOR";
+        case MODULE_VISION: return "VISION";
+        case MODULE_ENVIRONMENT: return "ENV";
+        case MODULE_POWER: return "POWER";
+        default: return "UNKNOWN";
+    }
+}
+
+// SensorType 이름 반환
+const char* type_to_str(uint8_t t)
+{
+    switch (t) {
+        case SENSOR_TEMPERATURE: return "TEMP";
+        case SENSOR_PRESSURE: return "PRESS";
+        case SENSOR_FORCE: return "FORCE";
+        case SENSOR_ULTRASONIC_POWER: return "US_POWER";
+        case SENSOR_POSITION_ENCODER: return "POS";
+        case SENSOR_MOTOR_CURRENT: return "CURR";
+        case SENSOR_MOTOR_VOLTAGE: return "VOLT";
+        case SENSOR_MOTOR_SPEED: return "SPEED";
+        case SENSOR_VIBRATION: return "VIB";
+        case SENSOR_VACUUM_PRESSURE: return "VAC";
+        case SENSOR_FLOW: return "FLOW";
+        case SENSOR_VISION_ALIGNMENT: return "ALIGN";
+        case SENSOR_DEFECT_DETECTION: return "DEFECT";
+        case SENSOR_HUMIDITY: return "HUM";
+        case SENSOR_AIRFLOW: return "AIR";
+        case SENSOR_POWER_CONSUMPTION: return "POWER";
+        default: return "UNKNOWN";
+    }
+}
+
+
+// 전송 직전에 센서 데이터 출력
+// --- 데이터 송신 전 디버깅 출력 함수 ---
+// 이 함수는 뮤텍스 내부에서 호출되어야 출력 결과가 스레드 간에 섞이지 않습니다.
+void debug_print_packet(uint64_t timestamp, SensorData* data, int count) {
+    printf("\n[TX PACKET] ------------------------------------------\n");
+    printf(" Timestamp  : %llu ms\n", (unsigned long long)timestamp);
+    printf(" Data Count : %d\n", count);
+    printf(" -----------------------------------------------------\n");
+
+    for (int i = 0; i < count; i++) {
+        int m, t, idx;
+        // 기존 정의된 유틸리티를 사용하여 ID 해석
+        decode_sensor_id(data[i].sensor_id, &m, &t, &idx);
+
+        // [형식] 인덱스: ID (모듈/타입/번호) -> 현재 측정값
+        printf(" [%3d] 0x%04X (Mod:%d, Type:%d, Idx:%d) -> Value: %.3f\n",
+               i, data[i].sensor_id, m, t, idx, data[i].value);
+    }
+    printf("------------------------------------------------------\n");
+}
+//========================================================================================================================
+
+/**
+ * [PRD 요구사항 반영] 
+ * 1. 128개 센서 데이터를 8개 모듈 스레드로 분산 처리
+ * 2. 공유 소켓 전송 시 Mutex를 사용하여 데이터 깨짐 방지
+ */
+
+#define MAX_SENSORS 128        // 시스템 내 최대 센서 수
+#define MODULE_COUNT 8         // 0x0 ~ 0x7 모듈 개수
+
+// --- 전역 자원 ---
+pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER; // 소켓 전송 동기화를 위한 뮤텍스
+int global_sock = -1;                                     // 서버와 연결된 전역 소켓 핸들
+
+
+
+
+
+
+
+
+
+
+
+// --- 스레드 전달용 구조체 ---
+typedef struct {
+    Module module_id;          // 해당 스레드가 담당할 모듈 (0~7)
+    Sensor* sensors;           // 전체 센서 설정 배열 (주기 등 정보)
+    SensorState* states;       // 전체 센서 상태 배열 (현재 값 정보)
+    int total_sensor_count;    // 초기화된 총 센서 개수
+} ModuleThreadArgs;
+
+/**
+ * @brief 모듈별 독립 스레드 루틴
+ * 각 모듈 스레드는 전체 센서 리스트를 순회하며 자기 담당 센서의 데이터만 생성/전송합니다.
+ */
+void* module_worker(void* arg) {
+    ModuleThreadArgs* args = (ModuleThreadArgs*)arg;
+    SensorData out_data[MAX_SENSORS]; // 주기가 도래한 데이터를 임시 저장할 배열
+    int out_count = 0;
+
+    printf("[Module Thread 0x%X] 독립 실행 시작\n", args->module_id);
+
+    while (1) {
+        uint64_t now = get_time_ms();
+        out_count = 0;
+
+        // 1. 내 담당 모듈의 센서 데이터 갱신 로직
+        for (int i = 0; i < args->total_sensor_count; i++) {
+            uint8_t m, t, idx;
+            // Sensor ID에서 모듈 정보를 추출하여 내 스레드 담당인지 확인
+            decode_sensor_id(args->sensors[i].sensor_id, &m, &t, &idx);
+
+            if (m == args->module_id) {
+                // 데이터 생성 주기가 되었는지 확인
+                if (now >= args->sensors[i].next_time_ms) {
+                    SensorClass* cls = find_sensor_class(args->states[i].sensor_id);
+                    if (cls) {
+                        // 센서 값 업데이트 및 전송 목록 추가
+                        args->states[i].value = update_sensor_value(args->states[i].value, cls);
+                        out_data[out_count].sensor_id = args->states[i].sensor_id;
+                        out_data[out_count].value = args->states[i].value;
+                        out_count++;
+                        
+                        // 다음 실행 시간 갱신
+                        args->sensors[i].next_time_ms = now + args->sensors[i].period_ms;
+                    }
+                }
+            }
+        }
+
+        // 2. 주기가 된 센서가 하나라도 있다면 서버로 패킷 전송
+        if (out_count > 0) {
+            // [Critical Section] 여러 스레드가 동시에 소켓을 사용하지 못하도록 잠금
+            pthread_mutex_lock(&socket_mutex);
+            
+            // 데이터 전송 전 디버깅 정보 출력
+            debug_print_packet(now, out_data, out_count);
+            // 실시간 고속 전송 수행 (packet.c 내부 로직 호출)
+            send_sensor_packet(global_sock, now, out_data, out_count);
+            
+            pthread_mutex_unlock(&socket_mutex); // 전송 후 즉시 잠금 해제
+        }
+
+        // 3. 미세 대기 (1ms): CPU 점유율 과부하 방지 및 실시간성 유지
+        usleep(1000);
+    }
+    return NULL;
+}
+
+/**
+ * @brief 장비 시뮬레이터 실행 메인 함수
+ */
+void run() {
+    Sensor sensors[MAX_SENSORS];
+    SensorState states[MAX_SENSORS];
+    
+    // 1. 센서 초기 설정 및 상태 메모리 초기화
+    int count = init_sensors(sensors);
+    init_sensor_states(states, sensors, count);
+
+    // 2. 네트워크 서버 접속
+    global_sock = connect_server();
+    if (global_sock < 0) {
+        fprintf(stderr, "서버 연결에 실패했습니다. 프로그램을 종료합니다.\n");
+        return;
+    }
+
+    // 3. 모듈별 스레드 생성 (8개 모듈 독립 구동)
+    pthread_t threads[MODULE_COUNT];
+    ModuleThreadArgs thread_args[MODULE_COUNT];
+
+    for (int i = 0; i < MODULE_COUNT; i++) {
+        thread_args[i].module_id = (Module)i;
+        thread_args[i].sensors = sensors;
+        thread_args[i].states = states;
+        thread_args[i].total_sensor_count = count;
+        
+        // 스레드 생성: 실패 시 에러 출력
+        if (pthread_create(&threads[i], NULL, module_worker, &thread_args[i]) != 0) {
+            perror("스레드 생성 실패");
+        }
+    }
+
+    // 4. 스레드 종료 대기 (실제 시뮬레이터는 중단 없이 동작)
+    for (int i = 0; i < MODULE_COUNT; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    // 5. 자원 정리
+    close(global_sock);
+    pthread_mutex_destroy(&socket_mutex);
+}
+
+
+================================================================================
+ FILE: run_equipment.h 
+================================================================================
+
+#include "../network/network.h"
+#include "../packet/packet.h"
+#include "../data_generator/data_generator.h"
+#include "../util/util.h"
+#include <pthread.h>
+
+#define MAX_SENSORS 128        // 총 센서 수
+#define MAX_PACKET_SENSORS 128  // 한 패킷에 담을 수 있는 최대 센서 수
+#define MICRO_SEC 100000
+
+void run();
+
+
+================================================================================
+ FILE: sensor_class.h 
+================================================================================
+
+#ifndef SENSOR_CLASS_H
+#define SENSOR_CLASS_H
+
+#include "common.h"
+
+//------------------------------------------------------------
+// 센서 클래스 (정상 범위 정의)
+//------------------------------------------------------------
+typedef struct {
+
+    uint8_t class_id;       // [Module(4bit)][SensorType(4bit)]
+    float normal_min;       // 정상 최소값
+    float normal_max;       // 정상 최대값
+
+} SensorClass;
+#endif
+
+
+================================================================================
+ FILE: sensor_classes_instance.c 
+================================================================================
+
+#include "sensor_id_utill.h"
+#include "sensor_class.h"
+#include "sensor_id.h"
+
+
+// 센서 종류, 정상값 저장
+SensorClass sensor_classes[] =
+{
+    // Bond Head
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_TEMPERATURE),        60.0, 150.0},
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_FORCE),               0.2,   5.0},
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_ULTRASONIC_POWER),    0.5,   5.0},
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_VIBRATION),           0.0,   0.3},
+
+    // Stage
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_POSITION_ENCODER),        0.0, 300.0},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_MOTOR_CURRENT),           0.2,   2.5},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_MOTOR_VOLTAGE),          24.0,  48.0},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_MOTOR_SPEED),             0.0, 500.0},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_VIBRATION),               0.0,   0.2},
+
+    // Heater
+    {MAKE_CLASS_ID(MODULE_HEATER, SENSOR_TEMPERATURE),          100.0, 250.0},
+    {MAKE_CLASS_ID(MODULE_HEATER, SENSOR_POWER_CONSUMPTION),    200.0,1000.0},
+
+    // Vacuum
+    {MAKE_CLASS_ID(MODULE_VACUUM, SENSOR_VACUUM_PRESSURE),      -80.0, -30.0},
+    {MAKE_CLASS_ID(MODULE_VACUUM, SENSOR_FLOW),                   5.0,  50.0},
+
+    // Motor / Drive
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_MOTOR_CURRENT),     0.5,   5.0},
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_MOTOR_VOLTAGE),    24.0,  48.0},
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_MOTOR_SPEED),       0.0,3000.0},
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_VIBRATION),         0.0,   0.4},
+
+    // Vision
+    {MAKE_CLASS_ID(MODULE_VISION, SENSOR_VISION_ALIGNMENT),      -5.0,   5.0},
+    {MAKE_CLASS_ID(MODULE_VISION, SENSOR_DEFECT_DETECTION),       0.0,   1.0},
+
+    // Environment
+    {MAKE_CLASS_ID(MODULE_ENVIRONMENT, SENSOR_TEMPERATURE),      20.0,  25.0},
+    {MAKE_CLASS_ID(MODULE_ENVIRONMENT, SENSOR_HUMIDITY),         30.0,  50.0},
+    {MAKE_CLASS_ID(MODULE_ENVIRONMENT, SENSOR_AIRFLOW),           0.3,   1.0},
+
+    // Power
+    {MAKE_CLASS_ID(MODULE_POWER, SENSOR_POWER_CONSUMPTION),    2000.0,10000.0}
+};
+
+
+// 실제 메모리 할당 + 초기화
+const int SENSOR_CLASS_COUNT = sizeof(sensor_classes) / sizeof(SensorClass);
+
+
+================================================================================
+ FILE: sensor_data.h 
+================================================================================
+
+#ifndef SENSOR_DATA_H
+#define SENSOR_DATA_H
+
+#include "common.h"
+
+//------------------------------------------------------------
+// 센서 데이터 구조 (패킷용)
+//------------------------------------------------------------
+typedef struct {
+
+    uint16_t sensor_id;     // 센서 ID  [Module|SensorType|Index]
+    float value;            // 센서 측정값
+
+} SensorData;
+
+#endif
+
+
+================================================================================
+ FILE: sensor_id.h 
+================================================================================
+
+#ifndef SENSOR_ID_H
+#define SENSOR_ID_H
+
+// 장비 내부 모듈 종류
+typedef enum {
+
+    MODULE_BOND_HEAD = 0,   // Bond Head
+    MODULE_STAGE,           // Stage
+    MODULE_HEATER,          // Heater
+    MODULE_VACUUM,          // Vacuum system
+    MODULE_MOTOR_DRIVE,     // Motor / Drive
+    MODULE_VISION,          // Vision system
+    MODULE_ENVIRONMENT,     // Environment sensors
+    MODULE_POWER            // Power system
+
+} Module;
+
+
+// 센서 측정 타입
+typedef enum {
+
+    SENSOR_TEMPERATURE = 0,      // temperature
+    SENSOR_PRESSURE,             // pressure
+    SENSOR_FORCE,                // force
+    SENSOR_ULTRASONIC_POWER,     // ultrasonic power
+    SENSOR_POSITION_ENCODER,     // position encoder
+    SENSOR_MOTOR_CURRENT,        // motor current
+    SENSOR_MOTOR_VOLTAGE,        // motor voltage
+    SENSOR_MOTOR_SPEED,          // motor speed
+    SENSOR_VIBRATION,            // vibration
+    SENSOR_VACUUM_PRESSURE,      // vacuum pressure
+    SENSOR_FLOW,                 // flow
+    SENSOR_VISION_ALIGNMENT,     // vision alignment
+    SENSOR_DEFECT_DETECTION,     // defect detection
+    SENSOR_HUMIDITY,             // humidity
+    SENSOR_AIRFLOW,              // airflow
+    SENSOR_POWER_CONSUMPTION     // power consumption
+
+} SensorType;
+
+
+#endif
+
+
+================================================================================
+ FILE: sensor_id_utill.c 
+================================================================================
+
+#include "sensor_id_utill.h"
+
+
+extern SensorClass sensor_classes[];
+extern const int SENSOR_CLASS_COUNT;
+
+// sensor_id → class_id 추출 후 해당 SensorClass 찾기
+// → 센서마다 정상 범위(min/max)를 얻기 위해 필요
+SensorClass* find_sensor_class(uint16_t sensor_id)
+{
+    uint8_t class_id = GET_CLASS_ID(sensor_id); // 상위 8비트: module + type
+
+    for (int i = 0; i < SENSOR_CLASS_COUNT; i++) {
+        if (sensor_classes[i].class_id == class_id) {
+            return &sensor_classes[i]; // 해당 클래스 반환
+        }
+    }
+    return 0; // 못 찾으면 NULL
+}
+
+
+
+================================================================================
+ FILE: sensor_id_utill.h 
+================================================================================
+
+#ifndef SENSOR_ID_UTILL_H
+#define SENSOR_ID_UTILL_H
+
+#include "sensor_class.h"
+#include "common.h"
+
+#define MODULE_SHIFT 12
+#define TYPE_SHIFT 8
+
+#define MAKE_CLASS_ID(module, type)  (((module) << 4) | (type))
+#define MAKE_SENSOR_ID(m,t,i)(((m & 0x0F) << 12) | ((t & 0x0F) << 8) | (i & 0xFF))
+#define GET_CLASS_ID(sensor_id) ((uint8_t)((sensor_id) >> 8))
+
+// sensor_id → class_id 추출 후 해당 SensorClass 찾기
+// → 센서마다 정상 범위(min/max)를 얻기 위해 필요
+SensorClass* find_sensor_class(uint16_t sensor_id);
+
+#endif
+
+
+================================================================================
+ FILE: sensor_state.h 
+================================================================================
+
+#ifndef SENSOR_STATE
+#define SENSOR_STATE
+
+#include "common.h"
+
+// 센서의 "현재 값 상태"를 유지하기 위한 구조체
+// → 매번 랜덤이 아니라 이전 값을 기반으로 변화시키기 위해 필요
+typedef struct {
+    uint16_t sensor_id;
+    float value;          // 현재 센서 값 (state)
+} SensorState;
+
+#endif
+
+
+================================================================================
+ FILE: sensor_type.h 
+================================================================================
+
+#ifndef SENSOR_TYPE_H
+#define SENSOR_TYPE_H
+
+#include "common.h"
+
+//------------------------------------------------------------
+// 센서 인스턴스 관리 구조
+//------------------------------------------------------------
+typedef struct {
+
+    uint16_t sensor_id;     // [Module|SensorType|Index]
+
+    uint32_t period_ms;     // 데이터 생성 주기
+    uint64_t next_time_ms;  // 다음 데이터 생성 시각
+
+} Sensor;
+
+#endif
+
+
+================================================================================
+ FILE: util.c 
+================================================================================
+
+#include "util.h"
+
+//------------------------------------------------------------
+// 현재 시간(ms)
+//------------------------------------------------------------
+// 시스템 시간을 millisecond 단위로 반환
+uint64_t get_time_ms()
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+
+    return (uint64_t)ts.tv_sec * 1000ULL + ts.tv_nsec / 1000000ULL;
+}
+
+
+// min ~ max 사이의 랜덤 float 생성
+// → 초기값, 변화량 계산에 사용
+float rand_float(float min, float max)
+{
+    return min + ((float)rand() / RAND_MAX) * (max - min);
+}
+
+// 값이 범위를 벗어나지 않도록 제한
+// → 센서 값이 정상 범위 유지하도록 보정
+float clamp(float v, float min, float max)
+{
+    if (v < min) return min;
+    if (v > max) return max;
+    return v;
+}
+
+
+================================================================================
+ FILE: util.h 
+================================================================================
+
+#include "common.h"
+
+// 시스템 시간을 millisecond 단위로 반환
+uint64_t get_time_ms();
+
+// min ~ max 사이의 랜덤 float 생성
+// → 초기값, 변화량 계산에 사용
+float rand_float(float min, float max);
+
+// 값이 범위를 벗어나지 않도록 제한
+// → 센서 값이 정상 범위 유지하도록 보정
+float clamp(float v, float min, float max);
+
+
+================================================================================
+ FILE: common.h 
+================================================================================
+
+#ifndef COMMON_H
+#define COMMON_H
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+
+#endif
+
+
+================================================================================
+ FILE: controller.c 
+================================================================================
+
+#include "controller.h"
+
+
+/* =========================
+   패킷 처리 (Hook)
+========================= */
+void handle_packet(uint8_t *packet) {
+    uint32_t body_len;
+    // HSMS Header (4바이트 length) 추출
+    memcpy(&body_len, packet, 4);
+    body_len = ntohl(body_len);
+
+    PacketData pkt;
+    memset(&pkt, 0, sizeof(PacketData));
+
+    // 실제 데이터 영역(Header 14 + Body)만 디코더에 전달 (뒷부분 0 무시)
+    decode_packet(packet, 14 + body_len, &pkt);
+
+    if (pkt.count > 0) {
+        save_to_storage(&pkt);
+        add_to_log_buffer(&pkt); // 3번 문제 관련: 로그 버퍼 적재
+        
+        char *json = build_json(&pkt);
+        if (json) monitor_send_all(json);
+    }
+}
+/* =========================
+   버퍼 처리
+========================= */
+
+// 이 함수가 메인 루프에서 호출되어 '조립'을 수행합니다.
+void process_buffer(RecvBuffer *rb) {
+    uint8_t packet_unit[4096];
+
+    while (try_extract_packet(rb, packet_unit)) {
+        handle_packet(packet_unit);
+    }
+}
+
+
+================================================================================
+ FILE: controller.h 
+================================================================================
+
+#ifndef CONTROLLER_H
+#define CONTROLLER_H
+
+#include "common.h"
+#include "hsms_receiver.h"
+#include "decoder.h"
+#include "packet_data.h"
+#include "monitor_server.h"
+#include "json_builder.h"
+#include "debug.h"
+#include "../storage/history_storage.h"
+#include "../storage/file_logger.h"
+
+/* =========================
+   패킷 처리 (Hook)
+========================= */
+void handle_packet(uint8_t *packet);
+
+
+/* =========================
+   버퍼 처리
+========================= */
+void process_buffer(RecvBuffer *rb);
+
+
+#endif 
+
+
+================================================================================
+ FILE: debug.c 
+================================================================================
+
+#include "debug.h"
+
+//============================================ 디 버 깅 ==================================================//
+void print_hex(uint8_t *data, int len)
+{
+    for (int i = 0; i < len; i++)
+    {
+        printf("%02X ", data[i]);
+
+        if ((i + 1) % 16 == 0)
+            printf("\n");
+    }
+    printf("\n");
+}
+
+/* Module 이름 */
+const char* get_module_name(int m)
+{
+    switch(m)
+    {
+        case 0: return "BondHead";
+        case 1: return "Stage";
+        case 2: return "Heater";
+        case 3: return "Vacuum";
+        case 4: return "Motor";
+        case 5: return "Vision";
+        case 6: return "Env";
+        case 7: return "Power";
+        default: return "Unknown";
+    }
+}
+
+/* Type 이름 */
+const char* get_type_name(int t)
+{
+    static const char* names[] = {
+        "Temperature",        // 0
+        "Pressure",           // 1
+        "Force",              // 2
+        "UltrasonicPower",    // 3
+        "PositionEncoder",    // 4
+        "MotorCurrent",       // 5
+        "MotorVoltage",       // 6
+        "MotorSpeed",         // 7
+        "Vibration",          // 8
+        "VacuumPressure",     // 9
+        "Flow",               // 10
+        "VisionAlignment",    // 11
+        "DefectDetection",    // 12
+        "Humidity",           // 13
+        "Airflow",            // 14
+        "PowerConsumption"    // 15
+    };
+
+    if (t >= 0 && t < 16)
+        return names[t];
+
+    return "Unknown";
+}
+
+/* 단위 */
+const char* get_unit(int m, int t)
+{
+    if (m == 0 && t == 0) return "°C";
+    if (m == 0 && t == 2) return "N";
+    if (m == 1 && t == 5) return "A";
+    if (m == 3 && t == 9) return "kPa";
+
+    return "";
+}
+
+/* 센서 하나 출력 */
+void print_sensor(SensorData *s, int idx)
+{
+    int m, t, i;
+    decode_sensor_id(s->sensor_id, &m, &t, &i);
+
+    printf("[%02d] M=%d T=%d I=%d  →  %.3f\n",
+           idx, m, t, i, s->value);
+
+    printf("      %s / %s\n",
+           get_module_name(m),
+           get_type_name(t));
+}
+//==============================================================================================//
+
+
+
+================================================================================
+ FILE: debug.h 
+================================================================================
+
+#ifndef DEBUG_HANDLER
+#define DEBUG_HANDLER
+
+#include "common.h"
+#include "sensordata.h"
+#include "sensor_id_util.h"
+
+void print_hex(uint8_t *data, int len);
+void print_sensor(SensorData *s, int idx);
+
+#endif 
+
+
+================================================================================
+ FILE: decoder.c 
+================================================================================
+
+#include "decoder.h"
+
+
+/* 전체 패킷 디코딩 */
+void decode_packet(uint8_t *packet, int len, PacketData *pkt)
+{
+    HSMSHeader h;
+
+    // 1. HSMS 헤더 파싱
+    parse_hsms_header(packet, &h);
+
+    // 2. SECS-II Body 파싱
+    parse_secs_body(packet + 14, pkt);
+}
+
+
+================================================================================
+ FILE: decoder.h 
+================================================================================
+
+#ifndef DECODER_H
+#define DECODER_H
+
+#include "hsms_header_parser.h"
+#include "secs2_parser.h"
+#include "packet_data.h"
+
+/* 전체 패킷 디코딩 */
+void decode_packet(uint8_t *packet, int len, PacketData *pkt);
+
+
+
+#endif
+
+
+================================================================================
+ FILE: hsms_header_parser.c 
+================================================================================
+
+#include "hsms_header_parser.h"
+
+
+
+/* HSMS 헤더를 파싱하는 함수 */
+void parse_hsms_header(uint8_t *buf, HSMSHeader *h)
+{
+    // network byte order → host 변환
+    h->length       = ntohl(*(uint32_t*)(buf));
+    h->session_id   = ntohs(*(uint16_t*)(buf + 4));
+
+    // 단일 바이트는 그대로 사용
+    h->stream       = buf[6];
+    h->function     = buf[7];
+    h->p_type       = buf[8];
+    h->s_type       = buf[9];
+
+    h->system_bytes = ntohl(*(uint32_t*)(buf + 10));
+}
+
+
+================================================================================
+ FILE: hsms_header_parser.h 
+================================================================================
+
+#ifndef HSMS_HEADER_H
+#define HSMS_HEADER_H
+
+#include "common.h"
+#include "hsms_header.h"
+
+/* HSMS 헤더를 파싱하는 함수 */
+void parse_hsms_header(uint8_t *buf, HSMSHeader *h);
+
+#endif
+
+
+================================================================================
+ FILE: secs2_parser.c 
+================================================================================
+
+#include "secs2_parser.h"
+
+
+/* 가변 길이 필드 파싱 */
+int parse_length(uint8_t *buf, int len_bytes)
+{
+    int len = 0;
+
+    for (int i = 0; i < len_bytes; i++) {
+        len = (len << 8) | buf[i];
+    }
+
+    return len;
+}
+
+/* network → host float 변환 */
+float ntohf(uint32_t net)
+{
+    uint32_t host = ntohl(net);
+
+    float f;
+    memcpy(&f, &host, sizeof(float));
+
+    return f;
+}
+
+
+uint16_t parse_u2(uint8_t *buf)
+{
+    return ntohs(*(uint16_t*)buf);
+}
+
+
+uint64_t parse_u8(uint8_t *buf)
+{
+    uint64_t val = 0;
+
+    for (int i = 0; i < 8; i++) {
+        val = (val << 8) | buf[i];
+    }
+
+    return val;
+}
+
+float parse_f4(uint8_t *buf)
+{
+    uint32_t net;
+    memcpy(&net, buf, 4);
+
+    return ntohf(net);
+}
+
+
+
+
+/* U2 전체 item 파싱 */
+int parse_u2_item(uint8_t *buf, uint16_t *out)
+{
+    int offset = 0;
+
+    uint8_t format = buf[offset++];
+    int len_bytes = GET_LEN_BYTES(format);
+
+    int len = parse_length(buf + offset, len_bytes);
+    offset += len_bytes;
+
+    if (len != 2) {
+        printf("U2 length error\n");
+        return -1;
+    }
+
+    *out = parse_u2(buf + offset);
+    offset += 2;
+
+    return offset;
+}
+
+
+/* U8 전체 item 파싱 */
+int parse_u8_item(uint8_t *buf, uint64_t *out)
+{
+    int offset = 0;
+
+    uint8_t format = buf[offset++];
+    int len_bytes = GET_LEN_BYTES(format);
+
+    int len = parse_length(buf + offset, len_bytes);
+    offset += len_bytes;
+
+    if (len != 8) {
+        printf("U8 length error\n");
+        return -1;
+    }
+
+    *out = parse_u8(buf + offset);
+    offset += 8;
+
+    return offset;
+}
+
+
+/* F4 전체 item 파싱 */
+int parse_f4_item(uint8_t *buf, float *out)
+{
+    int offset = 0;
+
+    uint8_t format = buf[offset++];
+    int len_bytes = GET_LEN_BYTES(format);
+
+    int len = parse_length(buf + offset, len_bytes);
+    offset += len_bytes;
+
+    if (len != 4) {
+        printf("F4 length error\n");
+        return -1;
+    }
+
+    *out = parse_f4(buf + offset);
+    offset += 4;
+
+    return offset;
+}
+
+
+/* 하나의 센서 데이터를 파싱 */
+int parse_sensor_item(uint8_t *buf, SensorData *out)
+{
+    int offset = 0;
+
+    // List
+    uint8_t format = buf[offset++];
+    int len_bytes = GET_LEN_BYTES(format);
+
+    int list_len = parse_length(buf + offset, len_bytes);
+    offset += len_bytes;
+
+    // sensor_id
+    offset += parse_u2_item(buf + offset, &out->sensor_id);
+
+    // value
+    offset += parse_f4_item(buf + offset, &out->value);
+
+    return offset;
+}
+
+/* 센서 리스트 전체 파싱 */
+int parse_sensor_list(uint8_t *buf, PacketData *pkt)
+{
+    int offset = 0;
+
+    uint8_t format = buf[offset++];
+    int len_bytes = GET_LEN_BYTES(format);
+
+    // 🔥 이건 "개수"
+    int item_count = parse_length(buf + offset, len_bytes);
+    offset += len_bytes;
+
+    int count = 0;
+
+    while (count < item_count && count < MAX_SENSORS)
+    {
+        int consumed = parse_sensor_item(buf + offset,
+                                         &pkt->sensors[count]);
+
+        if (consumed <= 0) {
+            printf("Sensor parse error\n");
+            break;
+        }
+
+        offset += consumed;
+        count++;
+    }
+
+    pkt->count = count;
+
+    return offset;
+}
+
+/* SECS-II Body 파싱 */
+int parse_secs_body(uint8_t *buf, PacketData *pkt) {
+    int offset = 0;
+
+    // 1. Root List 및 Timestamp (기존 로직 동일)
+    offset += 1; // List Format
+    offset += GET_LEN_BYTES(buf[offset-1]); 
+    offset += parse_u8_item(buf + offset, &pkt->timestamp);
+
+    // 2. [중요] 센서 개수 추출
+    uint16_t sensor_count;
+    offset += parse_u2_item(buf + offset, &sensor_count);
+
+    // 3. Sensor List Header Skip
+    offset += 1; 
+    offset += GET_LEN_BYTES(buf[offset-1]);
+
+    // 4. 장비가 보낸 실제 개수만큼만 반복 파싱
+    pkt->count = 0;
+    while (pkt->count < sensor_count && pkt->count < MAX_SENSORS) {
+        int consumed = parse_sensor_item(buf + offset, &pkt->sensors[pkt->count]);
+        if (consumed <= 0) break;
+        offset += consumed;
+        pkt->count++;
+    }
+
+    return offset;
+}
+
+
+================================================================================
+ FILE: secs2_parser.h 
+================================================================================
+
+#ifndef SECS2_PARSER_H
+#define SECS2_PARSER_H
+#include "common.h"
+#include "packet_data.h"
+
+/* SECS-II 타입 상위 6bit */
+#define GET_FORMAT(byte) ((byte) & 0xFC)
+
+/* length byte 수 (하위 2bit) */
+#define GET_LEN_BYTES(byte) ((byte) & 0x03)
+
+#define TYPE_LIST 0x00
+#define TYPE_U2   0xA8
+#define TYPE_U8   0xA0
+#define TYPE_F4   0x90
+
+/* SECS-II Body 파싱 */
+int parse_secs_body(uint8_t *buf, PacketData *pkt);
+
+#endif
+
+
+================================================================================
+ FILE: main.c 
+================================================================================
+
+#include "run_server.h"
+
+int main(){
+    return run();
+}
+
+
+================================================================================
+ FILE: json_builder.c 
+================================================================================
+
+#include "json_builder.h"
+#define DEBUG 0
+
+
+void print_sensor_log(int m, int t, int idx,
+                      float value, float avg, int anomaly)
+{
+
+    printf("M=%d T=%d I=%d | val=%.3f | avg=%.3f | %s\n",
+           m, t, idx,
+           value,
+           avg,
+           anomaly ? "🚨 ANOMALY" : "OK");
+}
+
+
+// =========================
+// JSON 생성
+// =========================
+char* build_json(PacketData *pkt)
+{
+    static char json[JSON_BUF_SIZE];
+    size_t len = 0;
+    json[0] = '\0';
+    int written;
+
+    // 1. 헤더 부분: count를 MAX_SENSORS가 아닌 pkt->count로 기록
+    written = snprintf(json + len, JSON_BUF_SIZE - len,
+                       "{\"timestamp\":%llu,\"count\":%d,\"sensors\":[",
+                       pkt->timestamp, pkt->count);
+    len += written;
+
+    // 2. [수정 핵심] MAX_SENSORS(128) 대신 실제 개수인 pkt->count만큼만 루프
+    for (int i = 0; i < pkt->count; i++) 
+    {
+        SensorData s = pkt->sensors[i];
+
+        int m, t, idx;
+        decode_sensor_id(s.sensor_id, &m, &t, &idx);
+
+        SensorState *state = get_sensor_state(s.sensor_id);
+        float avg = update_moving_average(state, s.value);
+        int anomaly = detect_anomaly(s.sensor_id, s.value);
+
+        // DEBUG 모드일 때 콘솔 출력 (여기서도 들어온 것만 찍히게 됨)
+        if (DEBUG){
+            print_sensor_log(m, t, idx, s.value, avg, anomaly);
+        }
+
+        written = snprintf(
+            json + len,
+            JSON_BUF_SIZE - len,
+            "{\"id\":%u,\"m\":%d,\"t\":%d,\"i\":%d,"
+            "\"value\":%.3f,\"avg\":%.3f,\"anomaly\":%d}%s",
+            s.sensor_id, m, t, idx, s.value, avg, anomaly,
+            ((i != pkt->count - 1) ? "," : "") // 마지막 요소가 아니면 콤마 추가
+        );
+        len += written;
+    }
+
+    // 3. 푸터 닫기
+    written = snprintf(json + len, JSON_BUF_SIZE - len, "]}");
+    len += written;
+    json[len] = '\0';
+
+    return json;
+}
+
+
+================================================================================
+ FILE: json_builder.h 
+================================================================================
+
+#ifndef JSON_BUILDER_H
+#define JSON_BUILDER_H
+#include <stdio.h>
+#include <string.h>
+
+#include "sensor_state.h"
+#include "sensor_id_util.h"
+#include "packet_data.h"
+#include "anomaly_detection.h"
+#include "moving_average.h"
+
+
+#define JSON_BUF_SIZE 32768
+#define MAX_SENSORS 128
+char* build_json(PacketData *pkt);
+
+#endif 
+
+
+================================================================================
+ FILE: monitor_server.c 
+================================================================================
+
+#include "monitor_server.h"
+
+static int server_fd;
+static int clients[MAX_CLIENTS];
+
+// =========================
+// 서버 초기화 (non-blocking 포함)
+// =========================
+void monitor_server_init(int port)
+{
+    struct sockaddr_in addr;
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
+
+    bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
+    listen(server_fd, 5);
+
+    int flags = fcntl(server_fd, F_GETFL, 0);
+    fcntl(server_fd, F_SETFL, flags | O_NONBLOCK);
+
+    for (int i = 0; i < MAX_CLIENTS; i++)
+        clients[i] = -1;
+
+    printf("📡 Monitoring server listening on %d\n", port);
+}
+
+void monitor_accept_clients()
+{
+    fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(server_fd, &readfds);
+
+    struct timeval tv;
+    tv.tv_sec = 0;
+    tv.tv_usec = 0;  // non-blocking
+
+    int ret = select(server_fd + 1, &readfds, NULL, NULL, &tv);
+
+    if (ret < 0) {
+        perror("select");
+        return;
+    }
+
+    // 👉 연결 요청 없음
+    if (ret == 0) {
+        return;
+    }
+
+    // 👉 accept 가능 상태
+    if (FD_ISSET(server_fd, &readfds)) {
+
+        struct sockaddr_in cli;
+        socklen_t len = sizeof(cli);
+
+        int new_fd = accept(server_fd, (struct sockaddr*)&cli, &len);
+
+        if (new_fd < 0) {
+            // non-blocking 환경에서 흔히 발생
+            if (errno == EWOULDBLOCK || errno == EAGAIN)
+                return;
+
+            perror("accept");
+            return;
+        }
+
+        // 👉 클라이언트 저장
+        for (int i = 0; i < MAX_CLIENTS; i++) {
+            if (clients[i] == -1) {
+                clients[i] = new_fd;
+                printf("✅ Client connected (%d)\n", new_fd);
+                return;
+            }
+        }
+
+        // 👉 자리 없으면 버림
+        printf("❌ Client rejected (full)\n");
+        close(new_fd);
+    }
+}
+
+
+
+
+// =========================
+// 클라이언트 전송 (안전)
+// =========================
+
+void monitor_send_all(const char *msg)
+{
+
+    uint32_t msg_len = strlen(msg);
+    uint32_t net_len = htonl(msg_len); // 네트워크 바이트 순서
+
+    for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clients[i] != -1)
+        {
+            // =========================
+            // 1️⃣ 길이 전송 (4바이트)
+            // =========================
+            size_t sent = 0;
+            while (sent < 4)
+            {
+                ssize_t n = send(clients[i], ((char*)&net_len) + sent, 4 - sent, 0);
+
+                if (n > 0) sent += n;
+                else if (n == 0)
+                {
+                    printf("❌ Client disconnected (%d)\n", clients[i]);
+                    close(clients[i]);
+                    clients[i] = -1;
+                    break;
+                }
+                else
+                {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+                    printf("❌ send length error (%d): %s\n", clients[i], strerror(errno));
+                    close(clients[i]);
+                    clients[i] = -1;
+                    break;
+                }
+            }
+
+            if (clients[i] == -1) continue;
+
+            // =========================
+            // 2️⃣ JSON 본문 전송
+            // =========================
+            sent = 0;
+            while (sent < msg_len)
+            {
+                ssize_t n = send(clients[i], msg + sent, msg_len - sent, 0);
+
+                if (n > 0) sent += n;
+                else if (n == 0)
+                {
+                    printf("❌ Client disconnected (%d)\n", clients[i]);
+                    close(clients[i]);
+                    clients[i] = -1;
+                    break;
+                }
+                else
+                {
+                    if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+                    printf("❌ send data error (%d): %s\n", clients[i], strerror(errno));
+                    close(clients[i]);
+                    clients[i] = -1;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+
+================================================================================
+ FILE: monitor_server.h 
+================================================================================
+
+#ifndef MONITOR_SERVER_H
+#define MONITOR_SERVER_H
+
+#include "common.h"
+#include <arpa/inet.h>
+#include <sys/select.h>
+#include <fcntl.h>
+#include <errno.h>
+
+#define MAX_CLIENTS 16
+
+void monitor_server_init(int port);
+void monitor_accept_clients();
+void monitor_send_all(const char *msg);
+
+#endif
+
+
+================================================================================
+ FILE: hsms_receiver.c 
+================================================================================
+
+#include "hsms_receiver.h"
+
+
+#define FIXED_SIZE 4096
+
+// 소켓에서 들어오는 조각 데이터를 버퍼 끝에 추가
+void buffer_append(RecvBuffer *rb, uint8_t *data, int len) {
+    if (rb->write_pos + len <= BUFFER_SIZE) {
+        memcpy(rb->buffer + rb->write_pos, data, len);
+        rb->write_pos += len;
+    }
+}
+
+// 데이터 수신 루틴
+int recv_data(int client_fd, RecvBuffer *rb) {
+    uint8_t tmp[2048];
+    int n = recv(client_fd, tmp, sizeof(tmp), 0);
+    if (n > 0) {
+        buffer_append(rb, tmp, n);
+    }
+    return n;
+}
+
+// 4096바이트가 차 있으면 꺼내주고, 남은 건 앞으로 당김 (조립 지원)
+int try_extract_packet(RecvBuffer *rb, uint8_t *out_packet) {
+    if (rb->write_pos < FIXED_SIZE) {
+        return 0; // 아직 데이터 부족
+    }
+
+    // 4096바이트 복사
+    memcpy(out_packet, rb->buffer, FIXED_SIZE);
+
+    // 잔여 데이터 처리 (Memmove로 앞으로 당김)
+    int remaining = rb->write_pos - FIXED_SIZE;
+    if (remaining > 0) {
+        memmove(rb->buffer, rb->buffer + FIXED_SIZE, remaining);
+    }
+    rb->write_pos = remaining;
+
+    return 1;
+}
+
+
+================================================================================
+ FILE: hsms_receiver.h 
+================================================================================
+
+#ifndef HSMS_RECEIVER_H
+#define HSMS_RECEIVER_H
+
+#include "common.h"
+#include "network.h"
+
+#define BUFFER_SIZE 8192
+#define HSMS_HEADER_SIZE 14
+
+
+typedef struct {
+    uint8_t buffer[BUFFER_SIZE];
+    int write_pos;
+} RecvBuffer;
+
+
+/* =========================
+   RecvBuffer 관리
+========================= */
+void buffer_append(RecvBuffer *rb, uint8_t *data, int len);
+
+
+/* =========================
+   소켓에서 데이터 수신
+========================= */
+int recv_data(int client_fd, RecvBuffer *rb);
+
+/* =========================
+   패킷 추출 (핵심)
+========================= */
+int try_extract_packet(RecvBuffer *rb, uint8_t *out_packet);
+
+
+#endif
+
+
+================================================================================
+ FILE: network.c 
+================================================================================
+
+#include "network.h"
+
+
+/* =========================
+   서버 생성
+========================= */
+int create_server()
+{
+    int server_fd;
+    struct sockaddr_in addr;
+
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(PORT);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind");
+        exit(1);
+    }
+
+    if (listen(server_fd, 5) < 0) {
+        perror("listen");
+        exit(1);
+    }
+
+    printf("Server listening on port %d...\n", PORT);
+    return server_fd;
+}
+
+/* =========================
+   클라이언트 연결
+========================= */
+int accept_client(int server_fd)
+{
+    struct sockaddr_in client_addr;
+    socklen_t len = sizeof(client_addr);
+
+    int client_fd = accept(server_fd,
+                           (struct sockaddr*)&client_addr,
+                           &len);
+
+    if (client_fd < 0) {
+        perror("accept");
+        exit(1);
+    }
+
+    printf("Client connected\n");
+    return client_fd;
+}
+
+
+
+
+
+================================================================================
+ FILE: network.h 
+================================================================================
+
+#ifndef NETWORK_H
+#define NETWORK_H
+
+#include "common.h"
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#define PORT 12345
+
+/* =========================
+   서버 생성
+========================= */
+int create_server();
+
+/* =========================
+   클라이언트 연결
+========================= */
+int accept_client(int server_fd);
+
+#endif
+
+
+================================================================================
+ FILE: run_server.c 
+================================================================================
+
+#include "run_server.h"
+
+
+/* =========================
+   클라이언트 처리 루프
+========================= */
+void run_client_loop(int client_fd)
+{
+    RecvBuffer rb = { .write_pos = 0 };
+
+    while (1)
+    {
+        int ret = recv_data(client_fd, &rb); // 장비로부터 데이터를 받음
+
+        if (ret <= 0) {
+            printf("Client disconnected\n");
+            break;
+        }
+        monitor_accept_clients();   // 모니터링 클라이언트 연결 처리
+        process_buffer(&rb);
+    }
+}
+
+
+int run(){
+    
+    init_storage(); // 서버 시작 시 저장소 초기화
+    init_file_logger("sensor_data.log");  // 디스크 로거 시작
+    
+    int server_fd = create_server(); // 장비용 서버 열기
+    monitor_server_init(9000);  // 모니터링용 서버 열기
+
+    int client_fd = accept_client(server_fd); // 장비 클라이언트가 들어올 때까지 대기 
+
+    run_client_loop(client_fd);
+
+    close(client_fd);
+    close(server_fd);
+
+    close_file_logger(); // 종료 시 파일 닫기
+    cleanup_storage();   // 종료 시 메모리 해제
+    return 0;
+}
+
+
+================================================================================
+ FILE: run_server.h 
+================================================================================
+
+#ifndef RUN_SERVER_H
+#define RUN_SERVER_H
+
+#include "controller.h"
+#include "../storage/history_storage.h"
+#include "../storage/file_logger.h"
+
+/* =========================
+   클라이언트 처리 루프
+========================= */
+void run_client_loop(int client_fd);
+int run();
+
+#endif
+
+
+================================================================================
+ FILE: anomaly_detection.c 
+================================================================================
+
+#include "anomaly_detection.h"
+
+int detect_anomaly(uint16_t sensor_id, float value)
+{
+    SensorClass *cls = find_sensor_class(sensor_id);
+
+    if (cls == NULL) {
+        printf("⚠️ No class for sensor 0x%04X\n", sensor_id);
+        return 0;
+    }
+
+    if (value < cls->normal_min || value > cls->normal_max)
+        return 1;
+
+    return 0;
+}
+
+
+================================================================================
+ FILE: anomaly_detection.h 
+================================================================================
+
+#ifndef ANOMALY_DETECTION_H
+#define ANOMALY_DETECTION_H
+
+#include "sensor_id_util.h"
+
+int detect_anomaly(uint16_t sensor_id, float value);
+
+#endif
+
+
+================================================================================
+ FILE: moving_average.c 
+================================================================================
+
+#include "moving_average.h"
+
+float update_moving_average(SensorState *s, float new_value)
+{
+    if (s->count < WINDOW_SIZE) {
+        s->window[s->index] = new_value;
+        s->sum += new_value;
+        s->count++;
+    } else {
+        s->sum -= s->window[s->index];
+        s->window[s->index] = new_value;
+        s->sum += new_value;
+    }
+
+    s->index = (s->index + 1) % WINDOW_SIZE;
+
+    return s->sum / s->count;
+}
+
+
+================================================================================
+ FILE: moving_average.h 
+================================================================================
+
+#ifndef MOVING_AVERAGE_H
+#define MOVING_AVERAGE_H
+
+#include "sensor_state.h"
+
+
+float update_moving_average(SensorState *s, float new_value);
+#endif
+
+
+================================================================================
+ FILE: process_sensor.c 
+================================================================================
+
+#include "process_sensor.h"
+
+#define DEBUG 1
+
+
+
+void process_sensor(SensorData *data)
+{
+    SensorState *state = get_sensor_state(data->sensor_id);
+
+    float avg = update_moving_average(state, data->value);
+
+    int is_anomaly = detect_anomaly(data->sensor_id, data->value);
+
+    int m, t, i;
+    decode_sensor_id(data->sensor_id, &m, &t, &i);
+
+    if(DEBUG){
+        printf("M=%d T=%d I=%d | val=%.3f | avg=%.3f | %s\n",
+           m, t, i,
+           data->value,
+           avg,
+           is_anomaly ? "🚨 ANOMALY" : "OK");
+    }
+   
+}
+
+
+================================================================================
+ FILE: process_sensor.h 
+================================================================================
+
+#ifndef PROCESSOR_SENSOR_H
+#define PROCESSOR_SENSOR_H
+
+#include "sensordata.h"
+#include "anomaly_detection.h"
+#include "moving_average.h"
+
+void process_sensor(SensorData *data);
+
+#endif
+
+
+================================================================================
+ FILE: sensor_state.c 
+================================================================================
+
+#include "sensor_state.h"
+
+static SensorState states[MAX_SENSOR];
+static int state_count = 0;
+
+/* sensor_id 기반으로 상태 가져오기 */
+SensorState* get_sensor_state(uint16_t sensor_id)
+{
+    for (int i = 0; i < state_count; i++) {
+        if (states[i].sensor_id == sensor_id)
+            return &states[i];
+    }
+
+    // 신규 생성
+    SensorState *s = &states[state_count++];
+    memset(s, 0, sizeof(SensorState));
+    s->sensor_id = sensor_id;
+
+    return s;
+}
+
+
+================================================================================
+ FILE: sensor_state.h 
+================================================================================
+
+#ifndef SENSOR_STATE_H
+#define SENSOR_STATE_H
+
+#include "common.h"
+
+#define MAX_SENSOR 1024
+#define WINDOW_SIZE 5
+
+typedef struct {
+    uint16_t sensor_id;
+
+    float window[WINDOW_SIZE];
+    int index;
+    int count;
+
+    float sum;   // O(1) 이동평균용
+} SensorState;
+
+SensorState* get_sensor_state(uint16_t sensor_id);
+
+#endif
+
+
+================================================================================
+ FILE: file_logger.c 
+================================================================================
+
+#include "file_logger.h"
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sys/stat.h>
+#include <limits.h>
+#include <string.h>
+
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
+
+static char g_log_filename[PATH_MAX];
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int g_buffer_idx = 0;
+static PacketData g_temp_buffer[10000];
+static long g_last_flush_time = 0;
+
+#define RETENTION_SEC 600
+#define MAX_LOG_SIZE (1024 * 1024 * 1024) // 1GB 제한
+
+// ID 기반 단위 반환 함수 (업로드해주신 센서 체계 반영)
+const char* get_unit_by_id(uint16_t id) {
+    int m = (id >> 12) & 0x0F; 
+    int t = (id >> 8) & 0x0F;  
+
+    switch (m) {
+        case 0: // Bond Head
+            if (t == 0) return "°C"; if (t == 2) return "N";
+            if (t == 3) return "W"; if (t == 8) return "g";
+            break;
+        case 1: // Stage
+            if (t == 4) return "mm"; if (t == 5) return "A";
+            if (t == 6) return "V"; if (t == 7) return "mm/s";
+            if (t == 8) return "g";
+            break;
+        case 2: // Heater
+            if (t == 0) return "°C"; if (t == 15) return "W";
+            break;
+        case 3: // Vacuum
+            if (t == 9) return "kPa"; if (t == 10) return "L/min";
+            break;
+        case 4: // Motor/Drive
+            if (t == 5) return "A"; if (t == 6) return "V";
+            if (t == 7) return "rpm"; if (t == 8) return "g";
+            break;
+        case 5: // Vision
+            if (t == 11) return "μm"; if (t == 12) return "-";
+            break;
+        case 6: // Environment
+            if (t == 0) return "°C"; if (t == 13) return "%RH";
+            if (t == 14) return "m/s";
+            break;
+        case 7: // Power
+            if (t == 15) return "kW";
+            break;
+    }
+    return "";
+}
+
+static long get_now_ms() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+static long get_file_size(const char *filename) {
+    struct stat st;
+    if (stat(filename, &st) == 0) return st.st_size;
+    return 0;
+}
+
+void init_file_logger(const char* filename) {
+    pthread_mutex_lock(&log_mutex);
+    
+    char base_path[PATH_MAX];
+#ifdef __APPLE__
+    uint32_t size = sizeof(base_path);
+    if (_NSGetExecutablePath(base_path, &size) == 0) {
+        char *last_slash = strrchr(base_path, '/');
+        if (last_slash) *last_slash = '\0';
+    } else {
+        getcwd(base_path, sizeof(base_path));
+    }
+#else
+    ssize_t len = readlink("/proc/self/exe", base_path, sizeof(base_path) - 1);
+    if (len != -1) {
+        base_path[len] = '\0';
+        char *last_slash = strrchr(base_path, '/');
+        if (last_slash) *last_slash = '\0';
+    } else {
+        getcwd(base_path, sizeof(base_path));
+    }
+#endif
+
+    snprintf(g_log_filename, sizeof(g_log_filename), "%s/%s", base_path, filename);
+
+    FILE *f = fopen(g_log_filename, "a");
+    if (f) fclose(f);
+    
+    g_last_flush_time = get_now_ms();
+    printf("📍 [Logger Target Path] %s\n", g_log_filename);
+    pthread_mutex_unlock(&log_mutex);
+}
+
+void flush_log_to_disk() {
+    pthread_mutex_lock(&log_mutex);
+    if (g_buffer_idx == 0) {
+        pthread_mutex_unlock(&log_mutex);
+        return;
+    }
+
+    const char* mode = "a";
+    if (get_file_size(g_log_filename) >= MAX_LOG_SIZE) {
+        mode = "w"; // 1GB 초과 시 초기화 (FIFO)
+        printf("⚠️ [WARNING] Log size exceeded 1GB. Resetting file.\n");
+    }
+
+    FILE *f = fopen(g_log_filename, mode);
+    if (!f) {
+        pthread_mutex_unlock(&log_mutex);
+        return;
+    }
+
+    uint64_t now_ms = (uint64_t)get_now_ms();
+    uint64_t cutoff = now_ms - (RETENTION_SEC * 1000);
+
+    for (int i = 0; i < g_buffer_idx; i++) {
+        if (g_temp_buffer[i].timestamp < cutoff) continue;
+
+        // 요구하신 포맷: [시간] ID:값:단위 (가독성을 위한 개행 추가)
+        fprintf(f, "------------------------------------------\n");
+        fprintf(f, "TIME : %llu\n", (unsigned long long)g_temp_buffer[i].timestamp);
+        
+        for (int j = 0; j < g_temp_buffer[i].count; j++) {
+            uint16_t id = g_temp_buffer[i].sensors[j].sensor_id;
+            float val = g_temp_buffer[i].sensors[j].value;
+            const char* unit = get_unit_by_id(id);
+            fprintf(f, "  => ID:0x%04X | VAL:%.3f | UNIT:%s\n", id, val, unit);
+        }
+    }
+
+    fflush(f);
+#ifdef __APPLE__
+    fcntl(fileno(f), F_FULLFSYNC); 
+#else
+    fsync(fileno(f));
+#endif
+    fclose(f); 
+
+    printf("💾 [DISK SAVE] %d 패킷 동기화 완료 (Size: %ld MB)\n", 
+            g_buffer_idx, get_file_size(g_log_filename) / (1024 * 1024));
+    
+    g_buffer_idx = 0;
+    pthread_mutex_unlock(&log_mutex);
+}
+
+void add_to_log_buffer(PacketData *pkt) {
+    pthread_mutex_lock(&log_mutex);
+    if (g_buffer_idx < 10000) {
+        memcpy(&g_temp_buffer[g_buffer_idx++], pkt, sizeof(PacketData));
+    }
+    pthread_mutex_unlock(&log_mutex);
+
+    long now = get_now_ms();
+    if (now - g_last_flush_time >= 1000) {
+        flush_log_to_disk();
+        g_last_flush_time = now;
+    }
+}
+
+void close_file_logger() {
+    flush_log_to_disk();
+}
+
+
+================================================================================
+ FILE: file_logger.h 
+================================================================================
+
+#ifndef FILE_LOGGER_H
+#define FILE_LOGGER_H
+
+#include "../common/common.h"
+#include "../type/packet_data.h"
+
+#define LOG_BUFFER_SIZE 1200 // 1초치 임시 버퍼
+
+void init_file_logger(const char* filename);
+void add_to_log_buffer(PacketData *pkt);
+void flush_log_to_disk();
+void close_file_logger();
+
+#endif
+
+
+================================================================================
+ FILE: history_storage.c 
+================================================================================
+
+#include "history_storage.h"
+
+static HistoryStorage g_storage;
+
+void init_storage() {
+    g_storage.history = (PacketData*)malloc(sizeof(PacketData) * MAX_HISTORY);
+    if (!g_storage.history) {
+        perror("Memory allocation failed for storage");
+        return;
+    }
+    memset(g_storage.history, 0, sizeof(PacketData) * MAX_HISTORY);
+    g_storage.head = g_storage.tail = g_storage.count = 0;
+    printf("📦 RAM Storage: Ready for 10min history\n");
+}
+
+void save_to_storage(PacketData *pkt) {
+    if (!g_storage.history) return;
+
+    memcpy(&g_storage.history[g_storage.tail], pkt, sizeof(PacketData));
+    uint64_t now = pkt->timestamp;
+
+    g_storage.tail = (g_storage.tail + 1) % MAX_HISTORY;
+    if (g_storage.count < MAX_HISTORY) g_storage.count++;
+    else g_storage.head = (g_storage.head + 1) % MAX_HISTORY;
+
+    // 시간 기준 FIFO 삭제
+    while (g_storage.count > 0) {
+        if (now - g_storage.history[g_storage.head].timestamp > RETENTION_MS) {
+            g_storage.head = (g_storage.head + 1) % MAX_HISTORY;
+            g_storage.count--;
+        } else break;
+    }
+}
+
+void cleanup_storage() {
+    if (g_storage.history) free(g_storage.history);
+}
+
+
+================================================================================
+ FILE: history_storage.h 
+================================================================================
+
+#ifndef HISTORY_STORAGE_H
+#define HISTORY_STORAGE_H
+
+#include "../common/common.h"
+#include "../type/packet_data.h"
+
+// 1ms 주기, 10분 데이터 = 600,000개. RAM 약 480MB 사용
+#define MAX_HISTORY 650000 
+#define RETENTION_MS (10 * 60 * 1000)
+
+typedef struct {
+    PacketData *history; 
+    int head;
+    int tail;
+    int count;
+} HistoryStorage;
+
+void init_storage();
+void save_to_storage(PacketData *pkt);
+void cleanup_storage();
+
+#endif
+
+
+================================================================================
+ FILE: main.c 
+================================================================================
+
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+
+/* ============================= */
+/* 🔹 HSMS Header 구조 (14 bytes) */
+/* ============================= */
+#pragma pack(push, 1)
+typedef struct {
+    uint32_t length;        // Body 길이
+    uint16_t session_id;
+    uint8_t  stream;
+    uint8_t  function;
+    uint8_t  p_type;
+    uint8_t  s_type;
+    uint32_t system_bytes;  // 메시지 ID
+} HSMSHeader;
+#pragma pack(pop)
+
+/* ============================= */
+/* 🔹 센서 데이터 구조 */
+/* ============================= */
+typedef struct {
+    uint16_t sensor_id;     // [Module|SensorType|Index]
+    float value;
+} SensorData;
+
+/* ============================= */
+/* 🔹 Sensor 정의 테이블 */
+/* ============================= */
+typedef struct {
+    uint8_t module;
+    uint8_t type;
+    const char *module_name;
+    const char *sensor_name;
+    const char *unit;
+} SensorInfo;
+
+SensorInfo sensor_table[] = {
+    {0x0,0x0,"Bond Head","Temperature","°C"},
+    {0x0,0x2,"Bond Head","Force","N"},
+    {0x0,0x3,"Bond Head","Ultrasonic Power","W"},
+    {0x0,0x8,"Bond Head","Vibration","g"},
+    {0x1,0x4,"Stage","Position Encoder","mm"},
+    {0x1,0x5,"Stage","Motor Current","A"},
+    {0x1,0x6,"Stage","Motor Voltage","V"},
+    {0x1,0x7,"Stage","Motor Speed","mm/s"},
+    {0x1,0x8,"Stage","Vibration","g"},
+    {0x2,0x0,"Heater","Temperature","°C"},
+    {0x2,0xF,"Heater","Power Consump","W"},
+    {0x3,0x9,"Vacuum","Vacuum Pressure","kPa"},
+    {0x3,0xA,"Vacuum","Flow","L/min"},
+    {0x4,0x5,"Motor/Drive","Motor Current","A"},
+    {0x4,0x6,"Motor/Drive","Motor Voltage","V"},
+    {0x4,0x7,"Motor/Drive","Motor Speed","rpm"},
+    {0x4,0x8,"Motor/Drive","Vibration","g"},
+    {0x5,0xB,"Vision","Vision Alignment","µm"},
+    {0x5,0xC,"Vision","Defect Detection","-"},
+    {0x6,0x0,"Environment","Temperature","°C"},
+    {0x6,0xD,"Environment","Humidity","%RH"},
+    {0x6,0xE,"Environment","Airflow","m/s"},
+    {0x7,0xF,"Power System","Power Consump","kW"}
+};
+
+#define SENSOR_TABLE_SIZE (sizeof(sensor_table)/sizeof(sensor_table[0]))
+
+/* ============================= */
+/* 🔹 sensor_id 분해 함수 */
+/* ============================= */
+void parse_sensor_id(uint16_t id, int *module, int *type, int *index) {
+    *module = (id >> 12) & 0x0F;
+    *type   = (id >> 8) & 0x0F;
+    *index  = id & 0xFF;
+}
+
+/* ============================= */
+/* 🔹 sensor_id → 이름/단위 매핑 */
+/* ============================= */
+const SensorInfo* lookup_sensor(uint16_t sensor_id) {
+    int m,t,i;
+    parse_sensor_id(sensor_id,&m,&t,&i);
+
+    for(int k=0;k<SENSOR_TABLE_SIZE;k++) {
+        if(sensor_table[k].module == m && sensor_table[k].type == t)
+            return &sensor_table[k];
+    }
+    return NULL; // 테이블에 없는 경우
+}
+
+/* ============================= */
+/* 🔹 endian-safe 읽기 유틸 */
+/* ============================= */
+uint16_t read_u2(uint8_t *buf) { return (buf[0]<<8)|buf[1]; }
+uint64_t read_u8(uint8_t *buf) {
+    uint64_t val=0; for(int i=0;i<8;i++) val=(val<<8)|buf[i]; return val;
+}
+float read_f4(uint8_t *buf) { uint32_t tmp=(buf[0]<<24)|(buf[1]<<16)|(buf[2]<<8)|buf[3]; float f; memcpy(&f,&tmp,sizeof(float)); return f; }
+
+/* ============================= */
+/* 🔹 SECS-II Body 파싱 */
+/* ============================= */
+int parse_secs_body(uint8_t *buf, int len) {
+    int offset=0;
+
+    offset++; offset++; // root list type/count
+
+    offset+=2; // timestamp type/length
+    uint64_t timestamp = read_u8(buf + offset); offset+=8;
+    printf("Timestamp: %llu ms\n", (unsigned long long)timestamp);
+
+    offset+=2; // sensor_count type/length
+    uint16_t sensor_count = read_u2(buf + offset); offset+=2;
+    printf("Sensor Count: %d\n", sensor_count);
+
+    offset+=2; // sensor list type/count
+    uint8_t list_count = buf[1]; // root list count ?? 간단화
+
+    for(int i=0;i<sensor_count;i++) {
+        offset+=2; // L[2] type/count
+
+        offset+=2; // sensor_id type/length
+        uint16_t sensor_id = read_u2(buf + offset); offset+=2;
+
+        offset+=2; // value type/length
+        float value = read_f4(buf + offset); offset+=4;
+
+        const SensorInfo *info = lookup_sensor(sensor_id);
+        if(info)
+            printf("[%02d] %s/%s(ID=0x%04X) = %.3f %s\n",
+                i, info->module_name, info->sensor_name, sensor_id, value, info->unit);
+        else
+            printf("[%02d] Unknown Sensor ID=0x%04X, Value=%.3f\n", i, sensor_id, value);
+    }
+    return 0;
+}
+
+/* ============================= */
+/* 🔹 전체 패킷 파싱 */
+/* ============================= */
+void parse_packet(uint8_t *packet) {
+    HSMSHeader *hdr = (HSMSHeader *)packet;
+    uint32_t length = ntohl(hdr->length);
+
+    printf("\n===== HSMS HEADER =====\n");
+    printf("Length: %u, Stream: %d, Function: %d, System Bytes: %u\n",
+        length,hdr->stream,hdr->function,ntohl(hdr->system_bytes));
+
+    parse_secs_body(packet + sizeof(HSMSHeader), length);
+}
+
+/* ============================= */
+/* 🔹 TCP 서버 열기 */
+/* ============================= */
+#define PORT 12345
+void run_server() {
+    int server_fd, client_fd;
+    struct sockaddr_in addr;
+    socklen_t addrlen=sizeof(addr);
+    uint8_t buffer[4096];
+
+    server_fd=socket(AF_INET,SOCK_STREAM,0);
+    if(server_fd<0){perror("socket"); exit(1);}
+
+    addr.sin_family=AF_INET;
+    addr.sin_addr.s_addr=INADDR_ANY;
+    addr.sin_port=htons(PORT);
+
+    if(bind(server_fd,(struct sockaddr*)&addr,sizeof(addr))<0){perror("bind"); exit(1);}
+    if(listen(server_fd,5)<0){perror("listen"); exit(1);}
+    printf("Server listening on port %d...\n",PORT);
+
+    client_fd=accept(server_fd,(struct sockaddr*)&addr,&addrlen);
+    if(client_fd<0){perror("accept"); exit(1);}
+    printf("Client connected\n");
+
+    while(1){
+        int n=recv(client_fd,buffer,sizeof(HSMSHeader),MSG_WAITALL);
+        if(n<=0) break;
+        HSMSHeader *hdr=(HSMSHeader*)buffer;
+        uint32_t body_len=ntohl(hdr->length);
+
+        n=recv(client_fd,buffer+sizeof(HSMSHeader),body_len,MSG_WAITALL);
+        if(n<=0) break;
+
+        parse_packet(buffer);
+    }
+    close(client_fd);
+    close(server_fd);
+}
+
+/* ============================= */
+/* 🔹 main */
+/* ============================= */
+int main() {
+    run_server();
+    return 0;
+}
+
+
+================================================================================
+ FILE: hsms_header.h 
+================================================================================
+
+#ifndef HSME_HEADER_H
+#define HSME_HEADER_H
+
+#include "common.h"
+
+/* =========================
+   HSMS Header
+========================= */
+typedef struct {
+    uint32_t length;
+    uint16_t session_id;
+    uint8_t  stream;
+    uint8_t  function;
+    uint8_t  p_type;
+    uint8_t  s_type;
+    uint32_t system_bytes;
+} HSMSHeader;
+
+#endif
+
+
+================================================================================
+ FILE: packet_data.h 
+================================================================================
+
+#ifndef PACKET_DATA_H
+#define PACKET_DATA_H
+
+
+#include "common.h"
+#include "sensordata.h"
+
+#define MAX_SENSORS 128
+
+
+/* =========================
+   Packet Data
+========================= */
+typedef struct {
+    uint64_t timestamp;
+    uint16_t count;
+    SensorData sensors[MAX_SENSORS];
+} PacketData;
+
+
+#endif
+
+
+
+
+================================================================================
+ FILE: sensor_class.h 
+================================================================================
+
+#ifndef SENSOR_CLASS_H
+#define SENSOR_CLASS_H
+
+#include "common.h"
+
+//------------------------------------------------------------
+// 센서 클래스 (정상 범위 정의)
+//------------------------------------------------------------
+typedef struct {
+
+    uint8_t class_id;       // [Module(4bit)][SensorType(4bit)]
+    float normal_min;       // 정상 최소값
+    float normal_max;       // 정상 최대값
+
+} SensorClass;
+#endif
+
+
+================================================================================
+ FILE: sensor_classes_instance.c 
+================================================================================
+
+#include "sensor_id_util.h"
+#include "sensor_class.h"
+#include "sensor_id.h"
+
+
+// 센서 종류, 정상값 저장
+SensorClass sensor_classes[] =
+{
+    // Bond Head
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_TEMPERATURE),        60.0, 150.0},
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_FORCE),               0.2,   5.0},
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_ULTRASONIC_POWER),    0.5,   5.0},
+    {MAKE_CLASS_ID(MODULE_BOND_HEAD, SENSOR_VIBRATION),           0.0,   0.3},
+
+    // Stage
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_POSITION_ENCODER),        0.0, 300.0},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_MOTOR_CURRENT),           0.2,   2.5},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_MOTOR_VOLTAGE),          24.0,  48.0},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_MOTOR_SPEED),             0.0, 500.0},
+    {MAKE_CLASS_ID(MODULE_STAGE, SENSOR_VIBRATION),               0.0,   0.2},
+
+    // Heater
+    {MAKE_CLASS_ID(MODULE_HEATER, SENSOR_TEMPERATURE),          100.0, 250.0},
+    {MAKE_CLASS_ID(MODULE_HEATER, SENSOR_POWER_CONSUMPTION),    200.0,1000.0},
+
+    // Vacuum
+    {MAKE_CLASS_ID(MODULE_VACUUM, SENSOR_VACUUM_PRESSURE),      -80.0, -30.0},
+    {MAKE_CLASS_ID(MODULE_VACUUM, SENSOR_FLOW),                   5.0,  50.0},
+
+    // Motor / Drive
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_MOTOR_CURRENT),     0.5,   5.0},
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_MOTOR_VOLTAGE),    24.0,  48.0},
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_MOTOR_SPEED),       0.0,3000.0},
+    {MAKE_CLASS_ID(MODULE_MOTOR_DRIVE, SENSOR_VIBRATION),         0.0,   0.4},
+
+    // Vision
+    {MAKE_CLASS_ID(MODULE_VISION, SENSOR_VISION_ALIGNMENT),      -5.0,   5.0},
+    {MAKE_CLASS_ID(MODULE_VISION, SENSOR_DEFECT_DETECTION),       0.0,   1.0},
+
+    // Environment
+    {MAKE_CLASS_ID(MODULE_ENVIRONMENT, SENSOR_TEMPERATURE),      20.0,  25.0},
+    {MAKE_CLASS_ID(MODULE_ENVIRONMENT, SENSOR_HUMIDITY),         30.0,  50.0},
+    {MAKE_CLASS_ID(MODULE_ENVIRONMENT, SENSOR_AIRFLOW),           0.3,   1.0},
+
+    // Power
+    {MAKE_CLASS_ID(MODULE_POWER, SENSOR_POWER_CONSUMPTION),    2000.0,10000.0}
+};
+
+
+// 실제 메모리 할당 + 초기화
+const int SENSOR_CLASS_COUNT = sizeof(sensor_classes) / sizeof(SensorClass);
+
+
+================================================================================
+ FILE: sensor_id.h 
+================================================================================
+
+#ifndef SENSOR_ID_H
+#define SENSOR_ID_H
+
+// 장비 내부 모듈 종류
+typedef enum {
+
+    MODULE_BOND_HEAD = 0,   // Bond Head
+    MODULE_STAGE,           // Stage
+    MODULE_HEATER,          // Heater
+    MODULE_VACUUM,          // Vacuum system
+    MODULE_MOTOR_DRIVE,     // Motor / Drive
+    MODULE_VISION,          // Vision system
+    MODULE_ENVIRONMENT,     // Environment sensors
+    MODULE_POWER            // Power system
+
+} Module;
+
+
+// 센서 측정 타입
+typedef enum {
+
+    SENSOR_TEMPERATURE = 0,      // temperature
+    SENSOR_PRESSURE,             // pressure
+    SENSOR_FORCE,                // force
+    SENSOR_ULTRASONIC_POWER,     // ultrasonic power
+    SENSOR_POSITION_ENCODER,     // position encoder
+    SENSOR_MOTOR_CURRENT,        // motor current
+    SENSOR_MOTOR_VOLTAGE,        // motor voltage
+    SENSOR_MOTOR_SPEED,          // motor speed
+    SENSOR_VIBRATION,            // vibration
+    SENSOR_VACUUM_PRESSURE,      // vacuum pressure
+    SENSOR_FLOW,                 // flow
+    SENSOR_VISION_ALIGNMENT,     // vision alignment
+    SENSOR_DEFECT_DETECTION,     // defect detection
+    SENSOR_HUMIDITY,             // humidity
+    SENSOR_AIRFLOW,              // airflow
+    SENSOR_POWER_CONSUMPTION     // power consumption
+
+} SensorType;
+
+
+#endif
+
+
+================================================================================
+ FILE: sensor_id_util.c 
+================================================================================
+
+#include "sensor_id_util.h"
+
+
+extern SensorClass sensor_classes[];
+extern const int SENSOR_CLASS_COUNT;
+
+// sensor_id → class_id 추출 후 해당 SensorClass 찾기
+// → 센서마다 정상 범위(min/max)를 얻기 위해 필요
+SensorClass* find_sensor_class(uint16_t sensor_id)
+{
+    uint8_t class_id = GET_CLASS_ID(sensor_id); // 상위 8비트: module + type
+
+    for (int i = 0; i < SENSOR_CLASS_COUNT; i++) {
+        if (sensor_classes[i].class_id == class_id) {
+            return &sensor_classes[i]; // 해당 클래스 반환
+        }
+    }
+    return NULL; // 못 찾으면 NULL
+}
+
+void decode_sensor_id(uint16_t id, int *module, int *type, int *index)
+{
+    *module = (id >> 12) & 0x0F;
+    *type   = (id >> 8)  & 0x0F;
+    *index  = id & 0xFF;
+}
+
+
+================================================================================
+ FILE: sensor_id_util.h 
+================================================================================
+
+#ifndef SENSOR_ID_UTIL_H
+#define SENSOR_ID_UTIL_H
+
+#include "sensor_class.h"
+#include "common.h"
+
+#define MODULE_SHIFT 12
+#define TYPE_SHIFT 8
+
+#define MAKE_CLASS_ID(module, type)  (((module) << 4) | (type))
+#define MAKE_SENSOR_ID(m,t,i)(((m & 0x0F) << 12) | ((t & 0x0F) << 8) | (i & 0xFF))
+#define GET_CLASS_ID(sensor_id) ((uint8_t)((sensor_id) >> 8))
+
+// sensor_id → class_id 추출 후 해당 SensorClass 찾기
+// → 센서마다 정상 범위(min/max)를 얻기 위해 필요
+SensorClass* find_sensor_class(uint16_t sensor_id);
+
+void decode_sensor_id(uint16_t id, int *module, int *type, int *index);
+#endif
+
+
+================================================================================
+ FILE: sensordata.h 
+================================================================================
+
+#ifndef SENSOR_DATA_H
+#define SENSOR_DATA_H
+
+#include "common.h"
+
+/* =========================
+   Sensor Data
+========================= */
+typedef struct {
+    uint16_t sensor_id;
+    float value;
+} SensorData;
+
+#endif
+

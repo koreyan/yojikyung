@@ -8,11 +8,13 @@
 #include "monitor_server.h"
 #include "json_builder.h"
 #include "debug.h"
+#include "../storage/history_storage.h"
+#include "../storage/file_logger.h"
 
 /* =========================
    패킷 처리 (Hook)
 ========================= */
-void handle_packet(uint8_t *packet, int len);
+void handle_packet(uint8_t *packet);
 
 
 /* =========================

@@ -1,0 +1,100 @@
+real_time_data_processing_system
+├── equipment
+│   ├── common
+│   │   └── common.h
+│   ├── data_generator
+│   │   ├── data_generator.c
+│   │   └── data_generator.h
+│   ├── main.c
+│   ├── makefile
+│   ├── network
+│   │   ├── network.c
+│   │   └── network.h
+│   ├── packet
+│   │   ├── packet.c
+│   │   └── packet.h
+│   ├── protocol
+│   │   ├── hsms
+│   │   │   └── hsms.h
+│   │   └── secs2
+│   │       ├── secs2.c
+│   │       └── secs2.h
+│   ├── run
+│   │   ├── run_equipment.c
+│   │   └── run_equipment.h
+│   ├── type
+│   │   ├── sensor_class.h
+│   │   ├── sensor_classes_instance.c
+│   │   ├── sensor_data.h
+│   │   ├── sensor_id.h
+│   │   ├── sensor_id_utill.c
+│   │   ├── sensor_id_utill.h
+│   │   ├── sensor_state.h
+│   │   └── sensor_type.h
+│   └── util
+│       ├── util.c
+│       └── util.h
+└── server
+    ├── common
+    │   └── common.h
+    ├── controller
+    │   ├── controller.c
+    │   ├── controller.h
+    │   └── debug
+    │       ├── debug.c
+    │       └── debug.h
+    ├── decoder
+    │   ├── decoder.c
+    │   ├── decoder.h
+    │   ├── hsms_header_parser
+    │   │   ├── hsms_header_parser.c
+    │   │   └── hsms_header_parser.h
+    │   └── secs2_parser
+    │       ├── secs2_parser.c
+    │       └── secs2_parser.h
+    ├── main.c
+    ├── makefile
+    ├── monitor_server
+    │   ├── json_builder
+    │   │   ├── json_builder.c
+    │   │   └── json_builder.h
+    │   ├── monitor_server.c
+    │   └── monitor_server.h
+    ├── network
+    │   ├── hsms_receiver
+    │   │   ├── hsms_receiver.c
+    │   │   └── hsms_receiver.h
+    │   ├── network.c
+    │   └── network.h
+    ├── run_server
+    │   ├── run_server.c
+    │   └── run_server.h
+    ├── sensor_data.log
+    ├── sensor_dispatcher
+    │   ├── anomaly_detection
+    │   │   ├── anomaly_detection.c
+    │   │   └── anomaly_detection.h
+    │   ├── moving_average
+    │   │   ├── moving_average.c
+    │   │   └── moving_average.h
+    │   ├── process_sensor.c
+    │   ├── process_sensor.h
+    │   └── sensor_state
+    │       ├── sensor_state.c
+    │       └── sensor_state.h
+    ├── storage
+    │   ├── file_logger.c
+    │   ├── file_logger.h
+    │   ├── history_storage.c
+    │   └── history_storage.h
+    ├── test
+    │   └── main.c
+    └── type
+        ├── hsms_header.h
+        ├── packet_data.h
+        ├── sensor_class.h
+        ├── sensor_classes_instance.c
+        ├── sensor_id.h
+        ├── sensor_id_util.c
+        ├── sensor_id_util.h
+        └── sensordata.h

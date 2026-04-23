@@ -1,76 +1,38 @@
 #include "controller.h"
 
 
-#define DEBUG 0
-
 /* =========================
    패킷 처리 (Hook)
 ========================= */
-void handle_packet(uint8_t *packet, int len)
-{
-    // RAW 확인
-    if (DEBUG){
-        print_hex(packet, len);
-    }
+void handle_packet(uint8_t *packet) {
+    uint32_t body_len;
+    // HSMS Header (4바이트 length) 추출
+    memcpy(&body_len, packet, 4);
+    body_len = ntohl(body_len);
 
-    HSMSHeader h;
-
-    // 1. HSMS 파싱
-    parse_hsms_header(packet, &h);
-
-    if(DEBUG){
-        printf("\n===== HSMS HEADER =====\n");
-        printf("Length: %u\n", h.length);
-        printf("Stream: %d, Function: %d\n", h.stream, h.function);
-    }
-    // sanity check
-    if (h.stream != 6 || h.function != 1)
-    {
-        printf("⚠️ Skip non S6F1 message\n");
-        return;
-    }
-
-    // 2. SECS 파싱
     PacketData pkt;
-    decode_packet(packet, len, &pkt);
+    memset(&pkt, 0, sizeof(PacketData));
 
+    // 실제 데이터 영역(Header 14 + Body)만 디코더에 전달 (뒷부분 0 무시)
+    decode_packet(packet, 14 + body_len, &pkt);
 
-    // 3. JSON 생성
-    char *json = build_json(&pkt);
-
-
-    // 4. 클라이언트에게 전송
-    monitor_send_all(json);
-
-
-
-    if (DEBUG){
-        printf("\n============================\n");
-        printf("[Packet]\n");
-        printf("Timestamp: %llu\n", pkt.timestamp);
-        printf("Sensor Count: %d\n\n", pkt.count);
-
-        for (int i = 0; i < pkt.count; i++)
-        {
-            print_sensor(&pkt.sensors[i], i);
-        }
+    if (pkt.count > 0) {
+        save_to_storage(&pkt);
+        add_to_log_buffer(&pkt); // 3번 문제 관련: 로그 버퍼 적재
+        
+        char *json = build_json(&pkt);
+        if (json) monitor_send_all(json);
     }
-
-
 }
-
-
 /* =========================
    버퍼 처리
 ========================= */
 
-void process_buffer(RecvBuffer *rb)
-{
-    uint8_t packet[BUFFER_SIZE];
-    int packet_len;
+// 이 함수가 메인 루프에서 호출되어 '조립'을 수행합니다.
+void process_buffer(RecvBuffer *rb) {
+    uint8_t packet_unit[4096];
 
-    while (try_extract_packet(rb, packet, &packet_len))
-    {
-        handle_packet(packet, packet_len);
+    while (try_extract_packet(rb, packet_unit)) {
+        handle_packet(packet_unit);
     }
 }

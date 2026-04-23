@@ -177,30 +177,30 @@ int parse_sensor_list(uint8_t *buf, PacketData *pkt)
 }
 
 /* SECS-II Body 파싱 */
-int parse_secs_body(uint8_t *buf, PacketData *pkt)
-{
+int parse_secs_body(uint8_t *buf, PacketData *pkt) {
     int offset = 0;
 
-    // Root List
-    uint8_t format = buf[offset++];
-    int len_bytes = GET_LEN_BYTES(format);
-
-    int total_len = parse_length(buf + offset, len_bytes);
-    offset += len_bytes;
-
-    // timestamp
+    // 1. Root List 및 Timestamp (기존 로직 동일)
+    offset += 1; // List Format
+    offset += GET_LEN_BYTES(buf[offset-1]); 
     offset += parse_u8_item(buf + offset, &pkt->timestamp);
 
-    // sensor_count
+    // 2. [중요] 센서 개수 추출
     uint16_t sensor_count;
     offset += parse_u2_item(buf + offset, &sensor_count);
 
-    // sensor_list
-    offset += parse_sensor_list(buf + offset, pkt);
+    // 3. Sensor List Header Skip
+    offset += 1; 
+    offset += GET_LEN_BYTES(buf[offset-1]);
 
-    // 디버깅
-    // printf("sensor_count(raw): %d\n", sensor_count);
-    // printf("parsed_count    : %d\n", pkt->count);
+    // 4. 장비가 보낸 실제 개수만큼만 반복 파싱
+    pkt->count = 0;
+    while (pkt->count < sensor_count && pkt->count < MAX_SENSORS) {
+        int consumed = parse_sensor_item(buf + offset, &pkt->sensors[pkt->count]);
+        if (consumed <= 0) break;
+        offset += consumed;
+        pkt->count++;
+    }
 
     return offset;
 }

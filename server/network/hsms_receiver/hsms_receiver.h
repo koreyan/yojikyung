@@ -28,7 +28,7 @@ int recv_data(int client_fd, RecvBuffer *rb);
 /* =========================
    패킷 추출 (핵심)
 ========================= */
-int try_extract_packet(RecvBuffer *rb, uint8_t *out_packet, int *out_len);
+int try_extract_packet(RecvBuffer *rb, uint8_t *out_packet);
 
 
 #endif

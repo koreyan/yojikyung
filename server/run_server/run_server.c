@@ -23,6 +23,10 @@ void run_client_loop(int client_fd)
 
 
 int run(){
+    
+    init_storage(); // 서버 시작 시 저장소 초기화
+    init_file_logger("sensor_data.log");  // 디스크 로거 시작
+    
     int server_fd = create_server(); // 장비용 서버 열기
     monitor_server_init(9000);  // 모니터링용 서버 열기
 
@@ -33,5 +37,7 @@ int run(){
     close(client_fd);
     close(server_fd);
 
-    return -1;
+    close_file_logger(); // 종료 시 파일 닫기
+    cleanup_storage();   // 종료 시 메모리 해제
+    return 0;
 }

@@ -43,6 +43,8 @@ SRCS = \
 	$(wildcard type/*.c) \
 	$(wildcard monitor_server/*.c) \
 	$(wildcard monitor_server/json_builder/*.c) \
+	$(wildcard monitor_server/json_builder/*.c) \
+	$(wildcard storage/*.c) \
 	main.c
 
 # 오브젝트
