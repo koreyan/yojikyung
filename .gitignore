@@ -1,7 +1,0 @@
-*.log
-*.o
-server/server
-equipment/equipment
-projectForGraduate/
-*.py
-.DS_Store
