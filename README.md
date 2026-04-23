@@ -13,6 +13,7 @@
 
 시스템 계층 구조 및 데이터 흐름 (Project Structure)
 
+'''
 real_time_data_processing_system
 ├── equipment (Simulator Tier)
 │   ├── data_generator/ (Logic: Delta Ratio 1%, Anomaly 0.01%)
@@ -26,7 +27,7 @@ real_time_data_processing_system
 │   └── monitor_server/ (Non-blocking JSON Broadcast)
 └── monitoring (Visualization Tier)
     └── UI/UX (Industrial Dark Mode, Chart.js, Status Tiles)  (아직 구현 안 됨)
-
+'''
 
 
 --------------------------------------------------------------------------------
