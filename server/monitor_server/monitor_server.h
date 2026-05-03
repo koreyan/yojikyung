@@ -12,5 +12,6 @@
 void monitor_server_init(int port);
 void monitor_accept_clients();
 void monitor_send_all(const char *msg);
+void monitor_periodic_task();
 
 #endif

@@ -55,7 +55,7 @@ all: $(TARGET)
 
 # 링크
 $(TARGET): $(OBJS)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(CC) $(CFLAGS) -o $@ $^ -lpthread
 
 # 컴파일
 %.o: %.c

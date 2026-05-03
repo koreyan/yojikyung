@@ -60,21 +60,19 @@ const char* type_to_str(uint8_t t)
 // --- 데이터 송신 전 디버깅 출력 함수 ---
 // 이 함수는 뮤텍스 내부에서 호출되어야 출력 결과가 스레드 간에 섞이지 않습니다.
 void debug_print_packet(uint64_t timestamp, SensorData* data, int count) {
-    printf("\n[TX PACKET] ------------------------------------------\n");
-    printf(" Timestamp  : %llu ms\n", (unsigned long long)timestamp);
-    printf(" Data Count : %d\n", count);
-    printf(" -----------------------------------------------------\n");
+    // printf("\n[TX PACKET] ------------------------------------------\n");
+    // printf(" Timestamp  : %llu ms\n", (unsigned long long)timestamp);
+    // printf(" Data Count : %d\n", count);
+    // printf(" -----------------------------------------------------\n");
 
     for (int i = 0; i < count; i++) {
-        uint8_t m, t, idx;
-        // 기존 정의된 유틸리티를 사용하여 ID 해석
-        decode_sensor_id(data[i].sensor_id, &m, &t, &idx);
+        // uint8_t m, t, idx;
+        // decode_sensor_id(data[i].sensor_id, &m, &t, &idx);
 
-        // [형식] 인덱스: ID (모듈/타입/번호) -> 현재 측정값
-        printf(" [%3d] 0x%04X (Mod:%d, Type:%d, Idx:%d) -> Value: %.3f\n",
-               i, data[i].sensor_id, m, t, idx, data[i].value);
+        // printf(" [%3d] 0x%04X (Mod:%d, Type:%d, Idx:%d) -> Value: %.3f\n",
+        //        i, data[i].sensor_id, m, t, idx, data[i].value);
     }
-    printf("------------------------------------------------------\n");
+    // printf("------------------------------------------------------\n");
 }
 //========================================================================================================================
 

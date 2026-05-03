@@ -1,4 +1,6 @@
 #include "monitor_server.h"
+#include <time.h>
+#include "json_builder/json_builder.h"
 
 static int server_fd;
 static int clients[MAX_CLIENTS];
@@ -10,13 +12,26 @@ void monitor_server_init(int port)
 {
     struct sockaddr_in addr;
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("socket (monitor)");
+        return;
+    }
+
+    int opt = 1;
+    setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port = htons(port);
 
-    bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
-    listen(server_fd, 5);
+    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("bind (monitor)");
+        return;
+    }
+    if (listen(server_fd, 5) < 0) {
+        perror("listen (monitor)");
+        return;
+    }
 
     int flags = fcntl(server_fd, F_GETFL, 0);
     fcntl(server_fd, F_SETFL, flags | O_NONBLOCK);
@@ -152,5 +167,24 @@ void monitor_send_all(const char *msg)
                 }
             }
         }
+    }
+}
+
+static long get_now_ms() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+void monitor_periodic_task() {
+    static long last_send_time = 0;
+    long now = get_now_ms();
+
+    if (now - last_send_time >= 1000) {
+        char *json = build_periodic_json();
+        if (json) {
+            monitor_send_all(json);
+        }
+        last_send_time = now;
     }
 }

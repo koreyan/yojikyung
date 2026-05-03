@@ -149,8 +149,8 @@ void flush_log_to_disk() {
 #endif
     fclose(f); 
 
-    printf("💾 [DISK SAVE] %d 패킷 동기화 완료 (Size: %ld MB)\n", 
-            g_buffer_idx, get_file_size(g_log_filename) / (1024 * 1024));
+    // printf("💾 [DISK SAVE] %d 패킷 동기화 완료 (Size: %ld MB)\n", 
+    //         g_buffer_idx, get_file_size(g_log_filename) / (1024 * 1024));
     
     g_buffer_idx = 0;
     pthread_mutex_unlock(&log_mutex);

@@ -49,8 +49,12 @@ int accept_client(int server_fd)
                            &len);
 
     if (client_fd < 0) {
-        perror("accept");
-        exit(1);
+        if (errno == EINTR) {
+            printf("⚠️ accept interrupted by signal\n");
+        } else if (errno != EWOULDBLOCK && errno != EAGAIN) {
+            perror("accept");
+        }
+        return -1;
     }
 
     printf("Client connected\n");

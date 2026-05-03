@@ -18,3 +18,8 @@ SensorState* get_sensor_state(uint16_t sensor_id)
 
     return s;
 }
+
+void get_all_sensor_states(SensorState** out_states, int* out_count) {
+    *out_states = states;
+    *out_count = state_count;
+}

@@ -1,4 +1,7 @@
 #include "controller.h"
+#include "../sensor_dispatcher/sensor_state/sensor_state.h"
+#include "../sensor_dispatcher/moving_average/moving_average.h"
+#include "../sensor_dispatcher/anomaly_detection/anomaly_detection.h"
 
 
 /* =========================
@@ -18,10 +21,23 @@ void handle_packet(uint8_t *packet) {
 
     if (pkt.count > 0) {
         save_to_storage(&pkt);
-        add_to_log_buffer(&pkt); // 3번 문제 관련: 로그 버퍼 적재
+        add_to_log_buffer(&pkt); 
         
-        char *json = build_json(&pkt);
-        if (json) monitor_send_all(json);
+        // 센서 상태 업데이트 (주기적 모니터링 전송을 위함)
+        for (int i = 0; i < pkt.count; i++) {
+            SensorData *s = &pkt.sensors[i];
+            SensorState *state = get_sensor_state(s->sensor_id);
+            
+            state->last_avg = update_moving_average(state, s->value);
+            
+            if (detect_anomaly(s->sensor_id, s->value)) {
+                state->has_anomaly = 1;
+                state->anomaly_value = s->value;
+            }
+        }
+        // [수정] 즉시 전송 로직 제거 (이제 1초 주기로 전송됨)
+        // char *json = build_json(&pkt);
+        // if (json) monitor_send_all(json);
     }
 }
 /* =========================

@@ -13,5 +13,6 @@
 #define JSON_BUF_SIZE 32768
 #define MAX_SENSORS 128
 char* build_json(PacketData *pkt);
+char* build_periodic_json();
 
-#endif 
+#endif
