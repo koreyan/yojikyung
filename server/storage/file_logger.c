@@ -18,7 +18,7 @@ static PacketData g_temp_buffer[10000];
 static long g_last_flush_time = 0;
 
 #define RETENTION_SEC 600
-#define MAX_LOG_SIZE (1024 * 1024 * 1024) // 1GB 제한
+#define MAX_LOG_SIZE (200 * 1024 * 1024) // 200MB 제한
 
 // ID 기반 단위 반환 함수 (업로드해주신 센서 체계 반영)
 const char* get_unit_by_id(uint16_t id) {

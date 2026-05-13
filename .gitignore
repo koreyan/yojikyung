@@ -1,7 +1,49 @@
-*.log
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# C/C++ Build Artifacts
 *.o
-server/server
+*.out
+*.exe
+*.dSYM/
 equipment/equipment
+server/server
+server/test/server
+server/test/hsms_dump
+
+# Log files
+*.log
+server/sensor_data.log
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Project specific
 projectForGraduate/
 *.py
-.DS_Store
+
+# Documentation and Reports (Excluded from Git)
+CLOUD_DEPLOYMENT_GUIDE.md
+TECHNICAL_REPORT_FOR_PDF.md
+PLAN.md
+*.pdf
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo

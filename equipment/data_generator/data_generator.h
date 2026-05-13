@@ -10,7 +10,7 @@
 
 #include "util.h"
 
-#define ABNORMAL_PROB 0.00001f // 0.01% 확률로 이상치 발생
+#define ABNORMAL_PROB 0.00001f // 0.00001% 확률로 이상치 발생
 #define DELTA_RATIO 0.0001f    // 변화 폭 (전체 범위의 1%)
 
 //------------------------------------------------------------

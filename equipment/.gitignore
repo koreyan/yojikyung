@@ -1,0 +1,4 @@
+*.env
+*.o
+./equipment
+.DS_Store

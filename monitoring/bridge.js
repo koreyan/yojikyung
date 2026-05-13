@@ -1,27 +1,39 @@
 /**
  * @file bridge.js
- * @description WebSocket (Browser) <-> TCP (C Server) Bridge
+ * @description WebSocket (Browser) <-> TCP (C Server) Bridge + Web Server
  */
 
+const express = require('express');
+const http = require('http');
 const WebSocket = require('ws');
 const net = require('net');
+const path = require('path');
+require('dotenv').config();
 
-const WS_PORT = 9000;
-const TCP_PORT = 9001;
-const TCP_HOST = '127.0.0.1';
+const app = express();
+const server = http.createServer(app);
 
-// 1. WebSocket Server (for Browser)
-const wss = new WebSocket.Server({ port: WS_PORT });
-console.log(`🚀 WebSocket Bridge listening on ws://localhost:${WS_PORT}`);
+// Environment Variables
+const PORT = process.env.PORT || 9000;
+const TCP_PORT = parseInt(process.env.TCP_PORT) || 9001;
+const TCP_HOST = process.env.TCP_HOST || '127.0.0.1';
 
-// 2. TCP Client (to C Server)
+// 1. Static Web Server (Serve monitoring dashboard)
+app.use(express.static(__dirname));
+
+// 2. WebSocket Server (for Browser, attached to same HTTP server)
+const wss = new WebSocket.Server({ server });
+console.log(`🚀 Monitoring Server running on port ${PORT}`);
+
+// 3. TCP Client (to C Server)
 let tcpClient = null;
 
 function connectToCServer() {
+    console.log(`🔗 Connecting to C Server at ${TCP_HOST}:${TCP_PORT}...`);
     tcpClient = new net.Socket();
 
     tcpClient.connect(TCP_PORT, TCP_HOST, () => {
-        console.log('✅ Connected to C Server');
+        console.log('✅ Successfully connected to C Server');
     });
 
     let buffer = Buffer.alloc(0);
@@ -30,7 +42,6 @@ function connectToCServer() {
         buffer = Buffer.concat([buffer, data]);
 
         while (buffer.length >= 4) {
-            // Read 4-byte length (Big Endian as per htonl)
             const msgLen = buffer.readUInt32BE(0);
 
             if (buffer.length >= 4 + msgLen) {
@@ -38,15 +49,11 @@ function connectToCServer() {
                 buffer = buffer.slice(4 + msgLen);
 
                 // Forward to all connected WS clients
-                const clientCount = wss.clients.size;
                 wss.clients.forEach(client => {
                     if (client.readyState === WebSocket.OPEN) {
                         client.send(jsonStr);
                     }
                 });
-                // if (clientCount > 0) {
-                //     console.log(`📤 Forwarded JSON to ${clientCount} clients: ${jsonStr.substring(0, 50)}...`);
-                // }
             } else {
                 break;
             }
@@ -68,4 +75,9 @@ connectToCServer();
 wss.on('connection', (ws) => {
     console.log('👤 Browser client connected');
     ws.on('close', () => console.log('👤 Browser client disconnected'));
+});
+
+// Start the integrated server
+server.listen(PORT, () => {
+    console.log(`📡 Dashboard available at http://localhost:${PORT}`);
 });

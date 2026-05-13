@@ -1,0 +1,6 @@
+*.o
+sensor_data.log
+.DS_Store
+server
+*.md
+test/
